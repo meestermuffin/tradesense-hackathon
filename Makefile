@@ -14,7 +14,7 @@ END      ?= $(shell $(PY) -c "import datetime;print(datetime.date.today()-dateti
 
 .DEFAULT_GOAL := help
 .PHONY: help status heartbeat capture cycle cycle-live snapshot \
-        series ic job2 probe roll verify schedule cleanup logs check lint fmt
+        series ic job2 probe roll risk verify schedule cleanup logs check lint fmt
 
 ## ---- everyday ----
 
@@ -43,6 +43,9 @@ print('  market open' if a.clock().get('is_open') else '  market closed')"
 	@echo
 	@echo "── last session ─────────────────────────────────"
 	@$(PY) scripts/heartbeat.py || true
+
+risk:  ## portfolio risk profile — correlation, effective bets, worst common days
+	@$(PY) scripts/risk_correlation.py
 
 verify:  ## check this account has the entitlements the project needs
 	@$(PY) scripts/verify_account.py

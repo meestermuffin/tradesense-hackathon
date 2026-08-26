@@ -18,7 +18,7 @@ to the one above them.
 
 ---
 
-## 1 · Is a per-name IV series buildable at all? · `7fe2797` → `294bc93`
+## 1 · Is a per-name IV series buildable at all? · `886486f` → `e5fb308`
 
 The signal ranks on IV percentile against a name's own history, which needs a daily IV series. Alpaca
 returns no implied volatility to this account, so IV is computed by Black-Scholes inversion from
@@ -54,7 +54,7 @@ occurred.
 
 ---
 
-## 2 · Was AMD's failure strike-level or name-level? · `bb633d6` → `ce881fa`
+## 2 · Was AMD's failure strike-level or name-level? · `41ebf11` → `57e6747`
 
 **Registered first, and the post-hoc freedom named as one.** v1 demanded the single nearest-ATM
 strike. v2 walks in-band strikes until one has a bar passing the filter. That change was chosen after
@@ -80,7 +80,7 @@ strike selects lower-vega contracts, where the same price uncertainty implies mo
 
 ---
 
-## 3 · Which names are eligible? · `ca30287` → `b4e86b1`
+## 3 · Which names are eligible? · `e9b9aa8` → `57a98fd`
 
 An `S/M ≤ 0.50` eligibility filter was floated. Applied, it leaves **exactly one name**.
 
@@ -109,7 +109,7 @@ sessions the print choice moves the ranking enough to flip a selection.
 
 ---
 
-## 4 · Does the premise hold? · `010fee8` → *voided* `beeb80a` → `e77eb0d`
+## 4 · Does the premise hold? · `79224da` → *voided* `4d1aff1` → `4d1aff1`
 
 **The first run was voided for a defect in its own statistic.** Outcome was `IV_t − RV_forward` and
 both signals were functions of `IV_t`, so it entered both sides positively — the statistic measured
@@ -139,7 +139,7 @@ harmful; selling the highest IV relative to a name's own history is not.
 
 ---
 
-## 5 · Is it just an earnings detector? · `8eadb70` → `f9ec34a` → `e0a923b`
+## 5 · Is it just an earnings detector? · `f66bc9e` → `f66bc9e` → `bc9c1aa`
 
 The strongest external objection: a large share of "this name's IV is unusually high" is earnings
 approaching, and if that is what the ranking detects, filtering earnings out does not protect the
@@ -175,7 +175,7 @@ daily Spearman over 11 names has no trustworthy asymptotics.
 
 ---
 
-## 6 · What does execution actually cost? · `1becbf5`, `37e4a61`, `d4f585c` → `06d47df`
+## 6 · What does execution actually cost? · `79224da`, `f66bc9e`, `b4853b6` → `ee4ff5d`
 
 Alpaca serves **no historical options quotes**. Four paths 404 against a 200 control on `quotes/latest`,
 and their catalogue lists *Historical bars* and *Historical trades* but only *Latest quotes*. That is

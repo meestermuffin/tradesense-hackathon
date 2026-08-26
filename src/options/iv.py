@@ -53,3 +53,32 @@ def realized_vol(closes, annualize=252):
     mu = sum(rets) / len(rets)
     var = sum((x - mu) ** 2 for x in rets) / (len(rets) - 1)
     return math.sqrt(var * annualize)
+
+
+def _n_pdf(x):
+    return math.exp(-x * x / 2) / math.sqrt(2 * math.pi)
+
+
+def greeks(S, K, T, r, sigma, cp):
+    """Delta, gamma, vega and theta for one contract.
+
+    Computed rather than read: greeks are OPRA-gated and simply absent from the API response on
+    this account. Vega is per 1 volatility point, theta per calendar day, matching how they are
+    usually quoted.
+    """
+    if T <= 0 or sigma <= 0:
+        intrinsic_delta = (1.0 if S > K else 0.0) if cp == "C" else (-1.0 if S < K else 0.0)
+        return dict(delta=intrinsic_delta, gamma=0.0, vega=0.0, theta=0.0)
+    sq = sigma * math.sqrt(T)
+    d1 = (math.log(S / K) + (r + sigma * sigma / 2) * T) / sq
+    d2 = d1 - sq
+    nd1 = _n_pdf(d1)
+    delta = _N(d1) if cp == "C" else _N(d1) - 1.0
+    gamma = nd1 / (S * sq)
+    vega = S * nd1 * math.sqrt(T) / 100.0
+    disc = K * math.exp(-r * T)
+    if cp == "C":
+        theta = (-S * nd1 * sigma / (2 * math.sqrt(T)) - r * disc * _N(d2)) / 365.0
+    else:
+        theta = (-S * nd1 * sigma / (2 * math.sqrt(T)) + r * disc * _N(-d2)) / 365.0
+    return dict(delta=delta, gamma=gamma, vega=vega, theta=theta)
