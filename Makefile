@@ -14,7 +14,7 @@ END      ?= $(shell $(PY) -c "import datetime;print(datetime.date.today()-dateti
 
 .DEFAULT_GOAL := help
 .PHONY: help status heartbeat capture cycle cycle-live snapshot \
-        series ic job2 probe schedule logs check
+        series ic job2 probe schedule cleanup logs check
 
 ## ---- everyday ----
 
@@ -97,6 +97,35 @@ probe:  ## IV-series gate probe, stage 2, v2 selection
 
 schedule:  ## install the four agents. Arm with: make schedule LIVE=1 ACCOUNT=PA...
 	@LIVE=$(LIVE) ACCOUNT=$(ACCOUNT) bash scripts/install_schedule.sh
+
+cleanup:  ## remove THIS project's four agents. Requires CONFIRM=yes
+	@echo "This removes only these four labels, by name — never by wildcard:"
+	@for n in capture cycle snapshot heartbeat; do echo "    com.tradesense.$$n"; done
+	@echo
+	@echo "Anything else stays. Currently loaded and NOT touched by this target:"
+	@other=$$(launchctl list 2>/dev/null | awk '{print $$3}' \
+	  | grep -vE '^com\.tradesense\.(capture|cycle|snapshot|heartbeat)$$' \
+	  | grep -iE 'trade|clerk|forge|stock'); \
+	if [ -n "$$other" ]; then echo "$$other" | sed 's/^/    /'; \
+	else echo "    (none loaded — nothing else to preserve)"; fi
+	@echo
+ifneq ($(CONFIRM),yes)
+	@echo "  re-run as:  make cleanup CONFIRM=yes"
+	@exit 1
+else
+	@for n in capture cycle snapshot heartbeat; do \
+	  launchctl bootout gui/$$(id -u)/com.tradesense.$$n 2>/dev/null \
+	    && echo "  removed com.tradesense.$$n" || echo "  com.tradesense.$$n was not loaded"; \
+	  rm -f $$HOME/Library/LaunchAgents/com.tradesense.$$n.plist; \
+	done
+	@echo
+	@echo "Done. Still loaded:"
+	@left=$$(launchctl list 2>/dev/null | grep -iE 'trade|clerk|forge'); \
+	if [ -n "$$left" ]; then echo "$$left" | sed 's/^/  /'; else echo "  (nothing)"; fi
+	@echo
+	@echo "NOTE: the wake schedule is left alone. If trade-sense agents rely on it, removing it"
+	@echo "      would stop them too:  sudo pmset repeat cancel"
+endif
 
 logs:  ## tail the scheduled-job logs
 	@tail -n 25 logs/*.log 2>/dev/null || echo "no logs yet — nothing has run"
