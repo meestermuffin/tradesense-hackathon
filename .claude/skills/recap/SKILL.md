@@ -1,6 +1,6 @@
 ---
 name: recap
-description: "Write a durable, human-readable recap of the current session to .claude/recaps/<date>-<topic>.md — what changed, what was verified, what's still open. Use at the END of any prolonged or multi-part session (several files/services touched, debugging + fixes, data migrations), when the user says 'recap', 'summarize what we did', 'wrap up', 'write this up', or before a session is about to be compacted/closed. To READ past recaps back ('what did we do last time', 'what's still open'), use the `recap-me` skill instead — this one writes."
+description: "Write a durable, human-readable recap of the current session to .claude/private/recaps/<date>-<topic>.md — what changed, what was verified, what's still open. Use at the END of any prolonged or multi-part session (several files/services touched, debugging + fixes, data migrations), when the user says 'recap', 'summarize what we did', 'wrap up', 'write this up', or before a session is about to be compacted/closed. To READ past recaps back ('what did we do last time', 'what's still open'), use the `recap-me` skill instead — this one writes."
 ---
 
 # /recap
@@ -24,7 +24,7 @@ recaps directory. Everything below is write mode.
 ## Where it goes
 
 ```
-<project-root>/.claude/recaps/
+<project-root>/.claude/private/recaps/
   INDEX.md                      # one line per recap, newest first
   2026-08-19-trader-metrics.md
 ```
@@ -33,7 +33,9 @@ recaps directory. Everything below is write mode.
 - Slug = 2–4 words describing the session's theme, kebab-case.
 - If a file for today's date+slug already exists, **append a new `## Session N` block** rather than
   overwriting — a day can hold several sessions.
-- Create `.claude/recaps/` and `INDEX.md` if absent.
+- Create `.claude/private/recaps/` and `INDEX.md` if absent. **Under `private/` deliberately:**
+the public repo would otherwise publish session records by accident, and `.claude/private/`
+is its own git repo, so recaps get version history instead of none.
 
 ## How to write it
 
@@ -113,7 +115,7 @@ Sections that would be empty are omitted — an empty "Corrections" heading is n
 
 ## Index entry
 
-Prepend one line to `.claude/recaps/INDEX.md` (newest first), and add the header if creating it:
+Prepend one line to `.claude/private/recaps/INDEX.md` (newest first), and add the header if creating it:
 
 ```markdown
 # Recaps

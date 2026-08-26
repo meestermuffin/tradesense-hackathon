@@ -1,13 +1,13 @@
 ---
 name: recap-me
-description: "Catch me up: read back existing session recaps from .claude/recaps/ and report what happened, what changed, and what's still open. Use when the user asks 'recap me', 'what did we do last time', 'where did we leave off', 'what's still open', 'any follow-ups', 'catch me up', or opens a session wanting context on prior work. Read-only — never writes. To CREATE a recap at the end of a session, use the `recap` skill instead."
+description: "Catch me up: read back existing session recaps from .claude/private/recaps/ and report what happened, what changed, and what's still open. Use when the user asks 'recap me', 'what did we do last time', 'where did we leave off', 'what's still open', 'any follow-ups', 'catch me up', or opens a session wanting context on prior work. Read-only — never writes. To CREATE a recap at the end of a session, use the `recap` skill instead."
 ---
 
 # /recap-me
 
 Read the recaps and tell the user where things stand. **Read-only — this skill never writes files.**
 
-Recaps live in `<project-root>/.claude/recaps/`, with `INDEX.md` listing them newest first. If that
+Recaps live in `<project-root>/.claude/private/recaps/`, with `INDEX.md` listing them newest first. If that
 directory doesn't exist, say so plainly and offer the `recap` skill to start one — don't invent
 history.
 
@@ -24,7 +24,7 @@ history.
 
 ## How to read
 
-1. `ls .claude/recaps/` and read `INDEX.md` first — it's the map.
+1. `ls .claude/private/recaps/` and read `INDEX.md` first — it's the map.
 2. Read the file(s) the request selects. For `open`, grep every recap for unticked boxes
    (`- [ ]`) and read the surrounding sections for context.
 3. Don't read every recap when one will do; don't answer from the index alone when the user
