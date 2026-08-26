@@ -165,3 +165,51 @@ the reported verdict remains **the weaker of A and B**.
 **The original run stays in the record.** It is what the registration asked for, it is what the
 protocol produced, and deleting it would hide that the protocol was wrong rather than the world
 surprising.
+
+---
+
+# Addendum 2 — job 2 is unblocked, and one judgement registered before the run
+
+**Written 2026-08-26, before job 2 ran.**
+
+## The dates come from a primary source
+
+`data/earnings_8k_2024_2025.json` — **SEC 8-K filings carrying Item 2.02 (Results of Operations)**,
+pulled from EDGAR's submissions API. The filing date *is* the announcement date. This is not an
+aggregator, and it replaces the hand-assembly the original registration assumed would be needed.
+
+**67 announcements across the ten single-name underlyings.** SPY returns zero, correctly — it is an
+ETF and has no earnings, which is a useful check that the extraction is doing what it claims.
+
+## The judgement call, registered rather than resolved after the fact
+
+**TSLA returns 12 filings where every other name returns 6.** The extra six are quarterly
+**production and delivery** reports, filed under the same Item 2.02 because they are results of
+operations. They are not earnings — but they *are* scheduled, binary, pre-announced events with an
+implied-vol run-up, which is precisely the mechanism job 2 exists to detect.
+
+**Registered decision:** the primary run uses **all Item 2.02 filings**, because the hypothesis under
+test is "the ranking is a scheduled-binary-event detector", not "the ranking is an earnings detector",
+and delivery reports are scheduled binary events.
+
+**A sensitivity is reported alongside it** with TSLA's six delivery dates removed. If the two
+readings differ materially, that difference is reported as a finding rather than resolved by picking
+one.
+
+## Everything else unchanged
+
+Exclusion window **±2 sessions** around each announcement, matching `earnings_blackout_days = 2`.
+Corrected outcome `(IV − RV_fwd)/IV`. Variants A, B and control C. Newey–West lag 21. Permutation
+seed 42, 1000 draws, within-day shuffle.
+
+**B remains confounded** — trailing and forward realized vol rank-correlate at +0.8166 on this data,
+so B and its outcome collapse toward a deterministic pair. B is reported and is not evidence. **The
+job-2 verdict rests on A**, read against control C.
+
+## Reading, registered in advance
+
+| outcome | verdict |
+|---|---|
+| A's IC survives removal, within its own permutation interval | the ranking is **not** merely a scheduled-event detector |
+| A's IC collapses toward zero | **the ranking is substantially a scheduled-event detector.** A quiet judged window contains none of what the measurement rewarded, and live underperformance would not mean the strategy broke |
+| A's IC *rises* on removal | events were adding noise, not signal; the exclusion filter earns its place on evidence rather than on caution |
