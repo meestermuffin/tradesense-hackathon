@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 DATA, TRADE = "https://data.alpaca.markets", "https://paper-api.alpaca.markets"
 
 # ---- registered parameters (docs/probes/2026-08-26-iv-series-probe.md) ----
-NAMES        = ["SPY", "AMD"]
+NAMES        = ["SPY", "AMD"]        # v1; v2 adds NFLX, AVGO via --names
 START, END   = date(2024, 3, 1), date(2025, 2, 28)
 DTE_LO, DTE_HI, DTE_TARGET = 21, 45, 30
 MNY_LO, MNY_HI = 0.95, 1.05
@@ -123,11 +123,11 @@ def option_bars(symbols, start, end):
                 break
     return out
 
-def select(sym, closes):
-    """For each session, the Friday expiry with DTE nearest 30 in [21,45], and the nearest-ATM
-    strike inside the moneyness band. Returns [(day, expiry, call_sym, put_sym, spot, T)]."""
+def candidates(sym, closes):
+    """Per session: the Friday expiry with DTE nearest 30 in [21,45], and every in-band strike
+    ordered by distance from spot. v1 uses element 0; v2 walks the list."""
     exps = sorted(fridays(START, END + timedelta(60)))
-    chains, picks = {}, []
+    chains, out = {}, []
     for day_s in sorted(closes):
         day = date.fromisoformat(day_s)
         cands = [e for e in exps if DTE_LO <= (e - day).days <= DTE_HI]
@@ -137,84 +137,98 @@ def select(sym, closes):
         if exp not in chains:
             chains[exp] = chain(sym, exp)
         S = closes[day_s]
-        strikes = sorted({float(c["strike_price"]) for c in chains[exp]
-                          if MNY_LO <= float(c["strike_price"]) / S <= MNY_HI})
-        if not strikes:
+        by = {}
+        for c in chains[exp]:
+            K = float(c["strike_price"])
+            if MNY_LO <= K / S <= MNY_HI:
+                by.setdefault(K, {})[c["type"]] = c["symbol"]
+        if not by:
             continue
-        K = min(strikes, key=lambda k: abs(k - S))
-        by = {(float(c["strike_price"]), c["type"]): c["symbol"] for c in chains[exp]}
-        picks.append(dict(day=day_s, exp=exp.isoformat(), K=K, S=S,
-                          T=(exp - day).days / 365.0,
-                          call=by.get((K, "call")), put=by.get((K, "put"))))
-    return picks
+        opts = [(K, v.get("call"), v.get("put")) for K, v in sorted(by.items(), key=lambda kv: abs(kv[0] - S))]
+        out.append(dict(day=day_s, exp=exp.isoformat(), S=S, T=(exp - day).days / 365.0, opts=opts))
+    return out
+
+def all_symbols(cands, mode):
+    if mode == "strict":
+        return sorted({x for c in cands for x in c["opts"][0][1:] if x})
+    return sorted({x for c in cands for K, cs, ps in c["opts"] for x in (cs, ps) if x})
+
+def ok(b):
+    return b and b["n"] >= MIN_TRADES and b["v"] >= MIN_VOLUME
+
+def pick(c, idx, mode):
+    """Return (K, call_bar, put_bar) for this session, or None."""
+    for K, cs, ps in c["opts"]:
+        cb, pb = idx.get((cs, c["day"])) if cs else None, idx.get((ps, c["day"])) if ps else None
+        if ok(cb) or ok(pb):
+            return K, (cb if ok(cb) else None), (pb if ok(pb) else None)
+        if mode == "strict":
+            return None
+    return None
 
 # ---------- stages ----------
-def stage1():
-    print("STAGE 1 — chain characterization.  BARRED from any verdict.\n")
+def stage1(names, mode):
+    print(f"STAGE 1 — chain characterization ({mode}).  BARRED from any verdict.\n")
     rep = {}
-    for sym in NAMES:
+    for sym in names:
         closes = stock_closes(sym)
-        picks = select(sym, closes)
-        syms = sorted({s for p in picks for s in (p["call"], p["put"]) if s})
-        bars = option_bars(syms, START, END)
-        idx = {(s, b["t"][:10]): b for s, bl in bars.items() for b in bl}
+        cands = candidates(sym, closes)
+        syms = all_symbols(cands, mode)
+        idx = {(t, b["t"][:10]): b for t, bl in option_bars(syms, START, END).items() for b in bl}
         got = kept = 0
-        ns, vs, floors = [], [], []
-        for p in picks:
-            for leg in ("call", "put"):
-                b = idx.get((p[leg], p["day"])) if p[leg] else None
-                if not b:
-                    continue
-                got += 1; ns.append(b["n"]); vs.append(b["v"])
-                if b["n"] >= MIN_TRADES and b["v"] >= MIN_VOLUME:
-                    kept += 1
-        for s, bl in bars.items():
-            if bl: floors.append(min(b["t"][:10] for b in bl))
-        rep[sym] = dict(sessions=len(closes), picks=len(picks), contracts=len(syms),
-                        legbars=got, passing=kept,
-                        n_med=st.median(ns) if ns else 0, v_med=st.median(vs) if vs else 0,
-                        n_p10=(sorted(ns)[len(ns)//10] if ns else 0),
-                        floor=min(floors) if floors else None)
+        ns = []
+        for c in cands:
+            for K, cs, ps in (c["opts"] if mode != "strict" else c["opts"][:1]):
+                for t in (cs, ps):
+                    b = idx.get((t, c["day"])) if t else None
+                    if b:
+                        got += 1; ns.append(b["n"])
+                        if ok(b): kept += 1
+        covered = sum(1 for c in cands if pick(c, idx, mode))
+        rep[sym] = dict(sessions=len(closes), cands=len(cands), contracts=len(syms),
+                        legbars=got, passing=kept, covered=covered,
+                        n_med=st.median(ns) if ns else 0)
         r = rep[sym]
-        print(f"{sym}:  sessions {r['sessions']}  selected {r['picks']}  contracts {r['contracts']}")
-        print(f"      leg-bars returned {r['legbars']}  passing filter {r['passing']} "
-              f"({100*r['passing']/max(r['legbars'],1):.1f}%)")
-        print(f"      trade-count n: median {r['n_med']:.0f}  p10 {r['n_p10']:.0f}   volume median {r['v_med']:.0f}")
-        print(f"      earliest bar seen: {r['floor']}\n")
-    json.dump(rep, open("stage1.json", "w"), indent=2)
-    print("wrote stage1.json — stage 1 issues NO verdict by construction")
+        print(f"{sym}:  sessions {r['sessions']}  contracts {r['contracts']}  leg-bars {r['legbars']}"
+              f"  passing {r['passing']}")
+        print(f"      sessions with a usable strike: {r['covered']}/{r['cands']} "
+              f"({100*r['covered']/max(r['cands'],1):.1f}%)   median n {r['n_med']:.0f}\n")
+    json.dump(rep, open(f"stage1_{mode}.json", "w"), indent=2)
+    print(f"wrote stage1_{mode}.json — stage 1 issues NO verdict by construction")
 
 def pct_rank(win, x):
     return 100.0 * sum(1 for v in win if v <= x) / len(win)
 
-def stage2():
-    print("STAGE 2 — judged against thresholds registered before any data was seen.\n")
-    for sym in NAMES:
+def stage2(names, mode):
+    print(f"STAGE 2 ({mode}) — judged against thresholds registered before any data was seen.\n")
+    for sym in names:
         closes = stock_closes(sym)
-        picks = select(sym, closes)
-        syms = sorted({s for p in picks for s in (p["call"], p["put"]) if s})
-        idx = {(s, b["t"][:10]): b for s, bl in option_bars(syms, START, END).items() for b in bl}
+        cands = candidates(sym, closes)
+        idx = {(t, b["t"][:10]): b for t, bl in
+               option_bars(all_symbols(cands, mode), START, END).items() for b in bl}
         series, div = [], []
-        for p in picks:
-            ivs_c, ivs_vw = [], []
-            for leg, cp in (("call", "C"), ("put", "P")):
-                b = idx.get((p[leg], p["day"])) if p[leg] else None
-                if not b or b["n"] < MIN_TRADES or b["v"] < MIN_VOLUME:
+        for c in cands:
+            got = pick(c, idx, mode)
+            if not got:
+                continue
+            K, cb, pb = got
+            a_, w_ = [], []
+            for b, cp in ((cb, "C"), (pb, "P")):
+                if not b:
                     continue
-                a = implied_vol(b["c"], p["S"], p["K"], p["T"], RATE, cp)
-                w = implied_vol(b["vw"], p["S"], p["K"], p["T"], RATE, cp)
-                if a: ivs_c.append(a)
-                if w: ivs_vw.append(w)
-            if ivs_c:
-                iv = sum(ivs_c) / len(ivs_c)
-                series.append((p["day"], iv))
-                if ivs_vw:
-                    m = sum(ivs_vw) / len(ivs_vw)
+                x = implied_vol(b["c"], c["S"], K, c["T"], RATE, cp)
+                y = implied_vol(b["vw"], c["S"], K, c["T"], RATE, cp)
+                if x: a_.append(x)
+                if y: w_.append(y)
+            if a_:
+                iv = sum(a_) / len(a_)
+                series.append((c["day"], iv))
+                if w_:
+                    m = sum(w_) / len(w_)
                     if m > 0: div.append(abs(iv - m) / m)
         sessions = len(closes)
         missing = 1 - len(series) / sessions
         vals = [v for _, v in series]
-        # lag-1 autocorrelation of log IV
         lg = [math.log(v) for v in vals]
         if len(lg) > 2:
             mu = sum(lg) / len(lg)
@@ -223,7 +237,6 @@ def stage2():
             ac = num / den if den else 0.0
         else:
             ac = 0.0
-        # percentile with the registered minimum-window rule
         pcts, unusable = {}, 0
         for i, (d, v) in enumerate(series):
             win = [x for _, x in series[max(0, i - PCT_WINDOW):i]]
@@ -237,25 +250,24 @@ def stage2():
         R = med_dp / NOISE_MEDIAN if dp else float("nan")
         M = st.median([abs(math.log(vals[i+1]/vals[i])) for i in range(len(vals)-1)]) if len(vals) > 1 else 0
         S_ = st.median(div) if div else float("nan")
-
-        def band(x, p, c, higher_better=False):
-            if higher_better: return "PASS" if x >= p else ("CONDITIONAL" if x >= c else "FAIL")
-            return "PASS" if x <= p else ("CONDITIONAL" if x <= c else "FAIL")
-        v1 = band(missing, 0.10, 0.30)
-        v2 = band(R, 0.40, 0.70)
-        v3 = band(ac, 0.80, 0.50, higher_better=True)
+        def band(x, p, c_, hi=False):
+            if hi: return "PASS" if x >= p else ("CONDITIONAL" if x >= c_ else "FAIL")
+            return "PASS" if x <= p else ("CONDITIONAL" if x <= c_ else "FAIL")
+        v1, v2, v3 = band(missing, .10, .30), band(R, .40, .70), band(ac, .80, .50, hi=True)
         print(f"=== {sym} ===")
         print(f"  IV days {len(series)}/{sessions}   unusable (window rule) {unusable}")
         print(f"  1 missing-day share      {missing*100:6.1f}%              {v1}")
-        print(f"  2 median|dp| {med_dp:6.2f}  R={R:5.2f} (noise={NOISE_MEDIAN:.2f})   {v2}")
+        print(f"  2 median|dp| {med_dp:6.2f}  R={R:5.2f}                    {v2}")
         print(f"  3 lag-1 autocorr log IV  {ac:6.3f}                {v3}")
-        print(f"  attribution: S={S_:.4f}  M={M:.4f}  S/M={S_/M if M else float('nan'):.2f}"
-              f"  -> {'MEASUREMENT NOISE DOMINATES (filter harder)' if (M and S_ >= 0.5*M) else 'variation mostly genuine'}")
-        verdict = "FAIL" if "FAIL" in (v1, v2, v3) else ("CONDITIONAL" if "CONDITIONAL" in (v1, v2, v3) else "PASS")
-        print(f"  GATE: {verdict}\n")
+        print(f"  attribution S/M = {S_/M if M else float('nan'):.2f}")
+        print(f"  GATE: {'FAIL' if 'FAIL' in (v1,v2,v3) else ('CONDITIONAL' if 'CONDITIONAL' in (v1,v2,v3) else 'PASS')}\n")
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage", type=int, required=True, choices=(1, 2))
+    ap.add_argument("--select", choices=("strict", "traded"), default="strict",
+                    help="strict = v1 (nearest strike only); traded = v2 (nearest strike with a passing bar)")
+    ap.add_argument("--names", default=",".join(NAMES))
     a = ap.parse_args()
-    (stage1 if a.stage == 1 else stage2)()
+    names = [x.strip().upper() for x in a.names.split(",") if x.strip()]
+    (stage1 if a.stage == 1 else stage2)(names, a.select)
