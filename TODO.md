@@ -65,24 +65,3 @@ Window opens **Fri 28 Aug**. Submission **Fri 4 Sep, 11:00 ET**.
 - [ ] **The LLM ablation** — LLM versus deterministic versus random, three accounts. This is what
       makes the agent non-cosmetic: not that it exists, but that we measured whether it earns its
       place. Needs the agent first, and a third paper account.
-
-## Housekeeping
-
-- [ ] **Push.** 11 commits unpushed.
-- [ ] **Tell solo the fill instrumentation already exists** — he said he would take the fill side and
-      have it up before the 28th. `src/options/execution.py` captures NBBO per leg before and after
-      every submit, and `scripts/capture_nbbo.py` runs the universe capture. He will otherwise spend
-      Thursday rebuilding it.
-- [ ] **Answer solo's two questions** — team registration eligibility, and current headcount. He asked
-      twice and has already sent a join request.
-- [ ] **Decide on squashing the branch.** Raised and unanswered: squashing to one commit destroys the
-      six registration→results ancestor checks that `docs/measurement-log.md` tells readers to run,
-      and 40 of 51 commits are already pushed.
-
-## Not doing, deliberately
-
-- **RV forecast model.** The plan's own words: *"an upgrade, not the premise."* Nothing in the rules
-  requires a trained model. Its absence means the technical story is measurement rather than
-  modelling, and the signal compares implied vol to *trailing* realized vol rather than a forecast.
-- **A backtested P&L number.** Alpaca serves no historical options quotes, and the one historical
-  estimator is blind in the loss regime. `docs/cost-model.md` makes this a rule rather than a habit.

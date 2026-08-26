@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: #020617;
+  --color-surface: #0f172a;
+  --color-surface-2: #1e293b;
+  --color-border: #1e293b;
+  --color-buy: #34d399;
+  --color-sell: #f87171;
+  --color-hold: #94a3b8;
+  --color-accent: #3b82f6;
+  --color-warning: #fbbf24;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background-color: var(--color-bg);
+  color: #f1f5f9;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100dvh;
+  background-color: var(--color-bg);
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+.signal-buy   { color: var(--color-buy); }
+.signal-sell  { color: var(--color-sell); }
+.signal-hold  { color: var(--color-hold); }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.18rem 0.55rem;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+/* Directional glyph carries the call at a glance (matches the ticker's arrows). */
+.badge::before { font-size: 0.78em; line-height: 1; }
+.badge-buy::before  { content: "\25B2"; } /* ▲ */
+.badge-sell::before { content: "\25BC"; } /* ▼ */
+.badge-hold::before { content: "\25CF"; } /* ● */
+
+.badge-buy  { background: rgba(52, 211, 153, 0.12);  color: var(--color-buy);  border-color: rgba(52, 211, 153, 0.32); }
+.badge-sell { background: rgba(248, 113, 113, 0.12); color: var(--color-sell); border-color: rgba(248, 113, 113, 0.32); }
+.badge-hold { background: rgba(148, 163, 184, 0.12); color: var(--color-hold); border-color: rgba(148, 163, 184, 0.30); }

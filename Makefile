@@ -14,7 +14,7 @@ END      ?= $(shell $(PY) -c "import datetime;print(datetime.date.today()-dateti
 
 .DEFAULT_GOAL := help
 .PHONY: help status heartbeat capture cycle cycle-live snapshot \
-        series ic job2 probe roll risk verify schedule cleanup logs check lint fmt
+        series ic job2 probe roll risk verify server server-build schedule cleanup logs check lint fmt
 
 ## ---- everyday ----
 
@@ -43,6 +43,15 @@ print('  market open' if a.clock().get('is_open') else '  market closed')"
 	@echo
 	@echo "── last session ─────────────────────────────────"
 	@$(PY) scripts/heartbeat.py || true
+
+server:  ## run the dashboard on :3100 (reads .env, credentials stay server-side)
+	@test -f .env || { echo "  no .env — copy .env.sample and add your paper credentials"; exit 1; }
+	@test -d ui/node_modules || (echo "  installing ui deps (first run)"; cd ui && npm install --silent --no-audit --no-fund)
+	@echo "  http://localhost:3100   ctrl-c to stop"
+	@set -a; . ./.env; set +a; cd ui && npm run dev
+
+server-build:  ## production build of the dashboard, and typecheck it
+	@cd ui && npm run build
 
 risk:  ## portfolio risk profile — correlation, effective bets, worst common days
 	@$(PY) scripts/risk_correlation.py

@@ -23,3 +23,8 @@ logs/
 # Ruff writes a self-ignoring .gitignore inside its own cache, so this is belt-and-braces --
 # but it means the repo does not depend on a tool continuing to clean up after itself.
 .ruff_cache/
+
+# UI build output and dependencies
+ui/node_modules/
+ui/.next/
+ui/next-env.d.ts

@@ -28,6 +28,24 @@ be rebuilt at all.
 which account the credentials resolve to before refusing, because a key pair does not announce which
 account it belongs to.
 
+### Dashboard
+
+```bash
+make server        # http://localhost:3100
+```
+
+Account, orders and the equity curve for whichever account `.env` points at. Credentials are read
+server-side in route handlers and never reach the browser; the page fetches from its own `/api`
+routes.
+
+The equity curve reads the committed per-session file rather than querying Alpaca, because that file
+is written by a job kept independent of the trading cycle and therefore has no gaps when a cycle is
+skipped — Sharpe and max drawdown are computed from consecutive daily returns, so a gap distorts
+both.
+
+It does not display Sharpe. Over a handful of sessions that number cannot separate skill from luck,
+and showing one would imply a precision the sample does not support.
+
 ### Scheduled agents
 
 `make schedule` installs four `launchd` agents: NBBO capture at 15:50, the cycle at 16:05, an equity
@@ -58,6 +76,7 @@ scripts/        measurement runners and the operational jobs
 docs/           measurement log, cost model
 docs/pending/   registrations for measurements that have not run
 data/           IV series, earnings dates; captures namespaced by account
+ui/             the dashboard — Next.js, credentials server-side only
 ```
 
 `make` lists every target.
