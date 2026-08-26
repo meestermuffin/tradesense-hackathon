@@ -213,3 +213,49 @@ job-2 verdict rests on A**, read against control C.
 | A's IC survives removal, within its own permutation interval | the ranking is **not** merely a scheduled-event detector |
 | A's IC collapses toward zero | **the ranking is substantially a scheduled-event detector.** A quiet judged window contains none of what the measurement rewarded, and live underperformance would not mean the strategy broke |
 | A's IC *rises* on removal | events were adding noise, not signal; the exclusion filter earns its place on evidence rather than on caution |
+
+---
+
+# Addendum 3 — job 2 as registered is underpowered; the powered test, registered before running
+
+**Written 2026-08-26, after the ±2 run, before the powered run.**
+
+Job 2 as registered returned **SURVIVES**: A's IC moved +0.1753 → **+0.1831** with scheduled-event
+name-days removed, permutation p 0.0010 throughout, and a sensitivity of −0.0152 for the TSLA
+delivery judgement. **That result stands for the protocol that was registered.**
+
+**But the protocol is the wrong width for its own hypothesis.** The ±2 session window was inherited
+from `earnings_blackout_days = 2`, which is a **risk** parameter — it governs when it is unwise to
+have a position open. Job 2 asks a **validity** question: is the ranking's apparent edge produced by
+scheduled events?
+
+The outcome is realized volatility over the **next 21 sessions**. An announcement anywhere in that
+window is inside the *outcome*, even when the name-day itself sits weeks away from the event.
+
+| | share of name-days |
+|---|---|
+| forward 21-session window **contains** an announcement | **35.8%** |
+| removed by the ±2 exclusion | **7.4%** |
+
+**The registered exclusion reaches about a fifth of the contamination it exists to test for.**
+
+## The powered test
+
+**One change:** exclude every name-day whose **forward outcome window** contains an announcement,
+rather than name-days within ±2 sessions of one. Everything else identical — outcome, variants,
+control, Newey–West lag 21, permutation seed 42, 1000 draws.
+
+This removes roughly 36% of the sample, so the surviving IC is measured on the name-days where **no
+scheduled event contributed to realized volatility at all**.
+
+## Reading, registered in advance
+
+| outcome | verdict |
+|---|---|
+| A's IC holds within its permutation interval | **the ranking is genuinely not an event detector.** The reviewer's attack is answered at full power |
+| A's IC collapses toward zero | **the edge is substantially scheduled-event driven**, the ±2 result was an artifact of a too-narrow window, and a quiet judged week contains none of what the measurement rewarded |
+| A's IC rises further | events were adding noise rather than signal |
+| A's permutation p rises above 0.05 | **inconclusive at this power** — 36% fewer name-days is a real cost, and losing significance is reported as lost, not as survival |
+
+That last row exists because removing a third of the sample can kill significance without the effect
+changing at all, and reporting that as "survives" would be the third overclaim of the day.
