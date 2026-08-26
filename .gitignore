@@ -1,0 +1,11 @@
+# Strategy detail and session records — not for the public repo
+.claude/private/
+.claude/settings.local.json
+
+# Local environment
+.env
+*.config.yml
+!*.config.sample.yml
+.venv/
+__pycache__/
+*.pyc
