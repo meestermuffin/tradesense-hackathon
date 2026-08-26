@@ -1,0 +1,36 @@
+# Lint and format config. Ruff only — one tool for both, MIT licensed, and installed via pipx so it
+# never becomes a runtime dependency. Nothing under src/ may import anything outside the standard
+# library; that rule is about what ships, and a dev tool does not ship.
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+# scripts/iv_series_probe.py is deliberately excluded from formatting.
+# Two committed pre-registrations name that file and its commit as the definition of how the IV
+# series was built. Reformatting it would leave the working copy differing from the file the
+# registrations describe, and anyone checking reproducibility would have to decide whether the
+# differences are cosmetic. Keeping it byte-identical costs nothing and removes that question.
+extend-exclude = ["scripts/iv_series_probe.py"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes — unused imports, undefined names
+    "I",    # import sorting
+    "UP",   # pyupgrade — modern syntax
+    "B",    # bugbear — likely bugs, mutable defaults, unused loop vars
+]
+ignore = [
+    "E741",  # ambiguous variable name: `l` reads fine in short numeric loops here
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Scripts add the repo root to sys.path before importing from src/, so their imports cannot sit at
+# the top of the file. This is a deliberate structure, not an oversight.
+"scripts/*.py" = ["E402"]
+
+[tool.ruff.format]
+quote-style = "double"
+docstring-code-format = true

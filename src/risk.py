@@ -7,12 +7,19 @@ expensive. Max loss is already bounded by the structure; that is the point of us
 
 Exits are: structural max loss (defined at entry), the portfolio kill switch, time, and liquidity.
 """
-import datetime, math
-from .universe import (MAX_OPEN_POSITIONS, MAX_LOSS_PER_POSITION_PCT,
-                       MAX_TOTAL_DEFINED_RISK_PCT, KILL_SWITCH_DRAWDOWN_PCT)
+
+import datetime
+import math
+
+from .universe import (
+    KILL_SWITCH_DRAWDOWN_PCT,
+    MAX_LOSS_PER_POSITION_PCT,
+    MAX_OPEN_POSITIONS,
+    MAX_TOTAL_DEFINED_RISK_PCT,
+)
 
 CONTRACT_MULTIPLIER = 100
-FEE_PER_CONTRACT_LEG = 0.025      # measured twice, exact both times, 2026-08-26
+FEE_PER_CONTRACT_LEG = 0.025  # measured twice, exact both times, 2026-08-26
 
 
 def defined_risk(width, credit, contracts):
@@ -37,16 +44,26 @@ def size_position(equity, width, credit):
     return n, None
 
 
-def check_entry(candidate, equity, open_positions, existing_risk, high_water,
-                earnings_dates=None, as_of=None, deadline=None):
+def check_entry(
+    candidate,
+    equity,
+    open_positions,
+    existing_risk,
+    high_water,
+    earnings_dates=None,
+    as_of=None,
+    deadline=None,
+):
     """Return (contracts, [reasons to refuse]). An empty reason list means the trade may go."""
     as_of = as_of or datetime.date.today()
     reasons = []
 
     drawdown = 0.0 if high_water <= 0 else (high_water - equity) / high_water
     if drawdown > KILL_SWITCH_DRAWDOWN_PCT:
-        reasons.append(f"kill switch: drawdown {drawdown*100:.1f}% over "
-                       f"{KILL_SWITCH_DRAWDOWN_PCT*100:.0f}% — flatten, open nothing")
+        reasons.append(
+            f"kill switch: drawdown {drawdown * 100:.1f}% over "
+            f"{KILL_SWITCH_DRAWDOWN_PCT * 100:.0f}% — flatten, open nothing"
+        )
 
     if len(open_positions) >= MAX_OPEN_POSITIONS:
         reasons.append(f"{len(open_positions)} open, cap is {MAX_OPEN_POSITIONS}")
@@ -65,7 +82,8 @@ def check_entry(candidate, equity, open_positions, existing_risk, high_water,
         if existing_risk + new_risk > equity * MAX_TOTAL_DEFINED_RISK_PCT:
             reasons.append(
                 f"total defined risk ${existing_risk + new_risk:.0f} would exceed "
-                f"{MAX_TOTAL_DEFINED_RISK_PCT*100:.0f}% (${equity*MAX_TOTAL_DEFINED_RISK_PCT:.0f})")
+                f"{MAX_TOTAL_DEFINED_RISK_PCT * 100:.0f}% of ${equity:.0f}"
+            )
 
     expiry = datetime.date.fromisoformat(candidate["expiry"])
     if deadline and expiry > deadline:

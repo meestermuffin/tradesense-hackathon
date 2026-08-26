@@ -8,7 +8,10 @@ contract selection is not.
 **Delta is computed, not read.** Greeks are OPRA-gated and absent from the API response on this
 account, so IV is inverted from the quote midpoint and delta derived from it.
 """
-import datetime, math
+
+import datetime
+import math
+
 from .iv import implied_vol
 
 RATE = 0.04
@@ -28,7 +31,7 @@ def _quality(q, max_spread_pct):
         return None, "no two-sided quote"
     mid = (bid + ask) / 2
     if (ask - bid) / mid > max_spread_pct:
-        return None, f"spread {100*(ask-bid)/mid:.1f}% over cap"
+        return None, f"spread {100 * (ask - bid) / mid:.1f}% over cap"
     return mid, None
 
 
@@ -48,20 +51,38 @@ def select_vertical(client, underlying, spot, template, as_of=None):
 
     # candidate expiries in the DTE band
     # explicit expiry bounds: the endpoint defaults to next weekend otherwise
-    expiries = sorted({c["expiration_date"] for c in client.option_contracts(
-        underlying, exp_gte=(as_of + datetime.timedelta(days=lo)).isoformat(),
-        exp_lte=(as_of + datetime.timedelta(days=hi)).isoformat(),
-        status="active", limit=10000)})
+    expiries = sorted(
+        {
+            c["expiration_date"]
+            for c in client.option_contracts(
+                underlying,
+                exp_gte=(as_of + datetime.timedelta(days=lo)).isoformat(),
+                exp_lte=(as_of + datetime.timedelta(days=hi)).isoformat(),
+                status="active",
+                limit=10000,
+            )
+        }
+    )
     if not expiries:
         return dict(rejected=f"no expiry in {lo}-{hi} DTE")
-    expiry = min(expiries, key=lambda e: abs(
-        (datetime.date.fromisoformat(e) - as_of).days - (lo + hi) / 2))
+    expiry = min(
+        expiries, key=lambda e: abs((datetime.date.fromisoformat(e) - as_of).days - (lo + hi) / 2)
+    )
     T = max((datetime.date.fromisoformat(expiry) - as_of).days, 1) / 365.0
 
     band = 0.25 * spot
-    chain = [c for c in client.option_contracts(
-        underlying, expiration_date=expiry, type_="put" if cp == "P" else "call",
-        strike_gte=spot - band, strike_lte=spot + band, status="active", limit=1000)]
+    chain = [
+        c
+        for c in client.option_contracts(
+            underlying,
+            expiration_date=expiry,
+            type_="put" if cp == "P" else "call",
+            strike_gte=spot - band,
+            strike_lte=spot + band,
+            status="active",
+            limit=1000,
+        )
+    ]
     if not chain:
         return dict(rejected=f"empty chain for {expiry}")
     by_strike = {float(c["strike_price"]): c["symbol"] for c in chain}
@@ -79,12 +100,22 @@ def select_vertical(client, underlying, spot, template, as_of=None):
         iv = implied_vol(mid, spot, K, T, RATE, cp)
         if not iv:
             continue
-        cands.append(dict(strike=K, symbol=by_strike[K], mid=mid, iv=iv,
-                          delta=bs_delta(spot, K, T, RATE, iv, cp), q=q))
+        cands.append(
+            dict(
+                strike=K,
+                symbol=by_strike[K],
+                mid=mid,
+                iv=iv,
+                delta=bs_delta(spot, K, T, RATE, iv, cp),
+                q=q,
+            )
+        )
     considered = len(by_strike)
     if not cands:
-        return dict(rejected=f"0 of {considered} strikes passed quote quality "
-                             f"(spread cap {max_spr*100:.0f}%) and inversion")
+        return dict(
+            rejected=f"0 of {considered} strikes passed quote quality "
+            f"(spread cap {max_spr * 100:.0f}%) and inversion"
+        )
 
     short = min(cands, key=lambda c: abs(abs(c["delta"]) - target))
     achieved = abs(short["delta"])
@@ -97,21 +128,28 @@ def select_vertical(client, underlying, spot, template, as_of=None):
         # discards the ones the template wants. Report the surviving range so that is legible
         # rather than looking like a missing chain.
         deltas = sorted(abs(c["delta"]) for c in cands)
-        return dict(rejected=f"nearest delta {achieved:.2f} vs target {target:.2f}; only "
-                             f"{len(cands)}/{considered} strikes passed quality, spanning delta "
-                             f"{deltas[0]:.2f}-{deltas[-1]:.2f}")
+        return dict(
+            rejected=f"nearest delta {achieved:.2f} vs target {target:.2f}; only "
+            f"{len(cands)}/{considered} strikes passed quality, spanning delta "
+            f"{deltas[0]:.2f}-{deltas[-1]:.2f}"
+        )
 
     # Strike spacing varies by name and price: a $5 wing does not exist on a $937 underlying.
     # Take the nearest *listed* strike to the requested distance rather than demanding it exactly.
-    wing_side = [c for c in cands
-                 if (c["strike"] < short["strike"] if cp == "P" else c["strike"] > short["strike"])]
+    wing_side = [
+        c
+        for c in cands
+        if (c["strike"] < short["strike"] if cp == "P" else c["strike"] > short["strike"])
+    ]
     if not wing_side:
         return dict(rejected="no tradable strike on the protective side")
     long_ = min(wing_side, key=lambda c: abs(abs(c["strike"] - short["strike"]) - width))
     actual_width = abs(short["strike"] - long_["strike"])
     if actual_width > template.get("max_width", width * 2):
-        return dict(rejected=f"nearest wing is {actual_width:g} wide, over the "
-                             f"{template.get('max_width', width*2):g} cap")
+        return dict(
+            rejected=f"nearest wing is {actual_width:g} wide, over the "
+            f"{template.get('max_width', width * 2):g} cap"
+        )
 
     credit_mid = short["mid"] - long_["mid"]
     credit_touch = short["q"]["bp"] - long_["q"]["ap"]
@@ -120,11 +158,21 @@ def select_vertical(client, underlying, spot, template, as_of=None):
     if credit_mid >= actual_width:
         # Credit above width implies negative max loss, which is an arbitrage, which means the
         # quotes are wrong — stale, crossed, or one side untraded. Never a real opportunity.
-        return dict(rejected=f"credit {credit_mid:.2f} >= width {actual_width:g}: quotes are "
-                             f"not trustworthy, not an arbitrage")
-    return dict(underlying=underlying, structure=template["structure"], expiry=expiry,
-                dte=(datetime.date.fromisoformat(expiry) - as_of).days,
-                short=short, long=long_, width=actual_width, spot=spot,
-                credit_mid=round(credit_mid, 4), credit_touch=round(credit_touch, 4),
-                max_loss=round(width - credit_mid, 4),
-                short_delta=round(short["delta"], 4))
+        return dict(
+            rejected=f"credit {credit_mid:.2f} >= width {actual_width:g}: quotes are "
+            f"not trustworthy, not an arbitrage"
+        )
+    return dict(
+        underlying=underlying,
+        structure=template["structure"],
+        expiry=expiry,
+        dte=(datetime.date.fromisoformat(expiry) - as_of).days,
+        short=short,
+        long=long_,
+        width=actual_width,
+        spot=spot,
+        credit_mid=round(credit_mid, 4),
+        credit_touch=round(credit_touch, 4),
+        max_loss=round(width - credit_mid, 4),
+        short_delta=round(short["delta"], 4),
+    )

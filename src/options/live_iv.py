@@ -9,7 +9,9 @@ definitions disagree by 46-94% of a typical daily IV move depending on the name.
 recorded on every reading so the size of the resulting error is measurable rather than assumed:
 tomorrow the same session appears in bars, and the two can be compared directly.
 """
+
 import datetime
+
 from .iv import implied_vol
 from .selection import RATE
 
@@ -22,15 +24,24 @@ def live_iv(client, symbol, spot, as_of=None):
     call/put mean. Returns None with a reason rather than guessing."""
     as_of = as_of or datetime.date.today()
     chain = client.option_contracts(
-        symbol, exp_gte=(as_of + datetime.timedelta(days=DTE_LO)).isoformat(),
+        symbol,
+        exp_gte=(as_of + datetime.timedelta(days=DTE_LO)).isoformat(),
         exp_lte=(as_of + datetime.timedelta(days=DTE_HI)).isoformat(),
-        status="active", limit=10000)
-    fridays = sorted({c["expiration_date"] for c in chain
-                      if datetime.date.fromisoformat(c["expiration_date"]).weekday() == 4})
+        status="active",
+        limit=10000,
+    )
+    fridays = sorted(
+        {
+            c["expiration_date"]
+            for c in chain
+            if datetime.date.fromisoformat(c["expiration_date"]).weekday() == 4
+        }
+    )
     if not fridays:
         return None, f"no Friday expiry in {DTE_LO}-{DTE_HI} DTE"
-    expiry = min(fridays, key=lambda e: abs(
-        (datetime.date.fromisoformat(e) - as_of).days - DTE_TARGET))
+    expiry = min(
+        fridays, key=lambda e: abs((datetime.date.fromisoformat(e) - as_of).days - DTE_TARGET)
+    )
     T = (datetime.date.fromisoformat(expiry) - as_of).days / 365.0
 
     by_strike = {}
@@ -57,7 +68,13 @@ def live_iv(client, symbol, spot, as_of=None):
             if v:
                 ivs.append(v)
         if ivs:
-            return dict(iv=sum(ivs) / len(ivs), strike=K, expiry=expiry, spot=spot,
-                        legs=len(ivs), source="quote_mid",
-                        seam="history is last-trade close; this is quote mid"), None
+            return dict(
+                iv=sum(ivs) / len(ivs),
+                strike=K,
+                expiry=expiry,
+                spot=spot,
+                legs=len(ivs),
+                source="quote_mid",
+                seam="history is last-trade close; this is quote mid",
+            ), None
     return None, "no in-band strike produced an invertible two-sided quote"

@@ -1,6 +1,10 @@
 """File-backed source: reads the CSV committed in data/. Standard library only."""
-import csv, gzip, os
+
+import csv
+import gzip
+
 from .source import FeatureSource
+
 
 class FileFeatureSource(FeatureSource):
     def __init__(self, path):
@@ -21,8 +25,9 @@ class FileFeatureSource(FeatureSource):
         return {r["day"]: float(r["spot"]) for r in self._load() if r["symbol"] == symbol}
 
     def iv_series(self, symbol):
-        return [(r["day"], float(r["iv"])) for r in self._load()
-                if r["symbol"] == symbol and r["iv"]]
+        return [
+            (r["day"], float(r["iv"])) for r in self._load() if r["symbol"] == symbol and r["iv"]
+        ]
 
     def rows(self, symbol=None):
         return [r for r in self._load() if symbol is None or r["symbol"] == symbol]

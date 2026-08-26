@@ -6,7 +6,9 @@ committed files get produced in the first place.
 
 Nothing above this interface may know which one it has.
 """
+
 from abc import ABC, abstractmethod
+
 
 class FeatureSource(ABC):
     @abstractmethod
