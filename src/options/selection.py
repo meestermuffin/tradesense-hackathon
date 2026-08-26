@@ -81,16 +81,25 @@ def select_vertical(client, underlying, spot, template, as_of=None):
             continue
         cands.append(dict(strike=K, symbol=by_strike[K], mid=mid, iv=iv,
                           delta=bs_delta(spot, K, T, RATE, iv, cp), q=q))
+    considered = len(by_strike)
     if not cands:
-        return dict(rejected="no strike passed quote-quality and inversion")
+        return dict(rejected=f"0 of {considered} strikes passed quote quality "
+                             f"(spread cap {max_spr*100:.0f}%) and inversion")
 
     short = min(cands, key=lambda c: abs(abs(c["delta"]) - target))
     achieved = abs(short["delta"])
     if abs(achieved - target) > delta_tol:
         # No strike sits near the target. Taking the nearest anyway is how a 0.25-delta template
         # ends up selling a 0.93-delta contract that is almost entirely intrinsic.
-        return dict(rejected=f"nearest strike is {achieved:.2f} delta, target {target:.2f} "
-                             f"(tolerance {delta_tol:.2f}) — no strike near the template")
+        #
+        # Usually this means the quality filter survived only near-ATM strikes: percentage spreads
+        # are tightest near the money, so a wide book leaves exactly the high-delta strikes and
+        # discards the ones the template wants. Report the surviving range so that is legible
+        # rather than looking like a missing chain.
+        deltas = sorted(abs(c["delta"]) for c in cands)
+        return dict(rejected=f"nearest delta {achieved:.2f} vs target {target:.2f}; only "
+                             f"{len(cands)}/{considered} strikes passed quality, spanning delta "
+                             f"{deltas[0]:.2f}-{deltas[-1]:.2f}")
 
     # Strike spacing varies by name and price: a $5 wing does not exist on a $937 underlying.
     # Take the nearest *listed* strike to the requested distance rather than demanding it exactly.
