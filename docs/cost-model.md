@@ -7,12 +7,24 @@ is fitted on captured NBBO. This document exists so that rule has something to p
 
 ## Why cost has to be estimated rather than charged
 
-Alpaca serves **no historical options quote data**. Confirmed three ways: 404 on a live contract,
+Alpaca serves **no historical options quote data**. Re-verified 2026-08-26: 404 on a live contract,
 404 on an expired one, and absent from Alpaca's own endpoint catalogue, which lists historical
 *bars* and *trades* and separately *latest* quotes.
 
-**A backtest that charges bid/ask against history is charging against data that does not exist.** So
-cost is modelled in two independent pieces:
+The catalogue asymmetry is the strongest part of this: Alpaca lists **Historical bars** and
+**Historical trades** as named endpoints, and for quotes lists only **Latest quotes**. That is a
+product boundary, not a request being malformed — and a 200 on `quotes/latest` for the same symbol
+rules out an auth or symbol problem.
+
+**Scope, stated precisely because the loose version forecloses a real option:** this establishes that
+*Alpaca* serves none. It does **not** establish that none exists. OPRA history is sold commercially.
+It was ruled out here on cost, MIT redistribution obligations and the time available — a decision,
+not an absence. **Purchasing it is the single change that would make a defensible backtested P&L
+reachable**, and anyone revisiting the cost model should weigh that rather than treat the data as
+non-existent.
+
+**A backtest that charges bid/ask against Alpaca history is charging against data Alpaca does not
+serve.** So cost is modelled in two independent pieces:
 
 | piece | what it answers | status |
 |---|---|---|
