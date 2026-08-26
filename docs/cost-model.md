@@ -147,8 +147,31 @@ spread. This project's own fill measurements found trades clearing better than t
 *should* differ by roughly this factor. For a cost model, the effective spread is the more relevant
 number.
 
-**Coverage:** 77 of 132 contracts estimable. 34 dropped for too few trades, 21 for non-negative
-autocovariance — Roll's assumption failing, which is a condition to detect and drop, not to patch.
+**Reproduced 2026-08-26 from a committed runner** (`scripts/roll_spread.py`, per-contract output
+in `data/roll/`): 77 of 132 estimable, 34 dropped for too few trades, 21 for non-negative
+autocovariance, rho **+0.500**. The original number came from an uncommitted heredoc and was
+returned UNRESOLVABLE by review; it now recomputes.
+
+**But rho +0.500 on n=11 has a one-sided permutation p of 0.0604** (200,000 draws, seed 42). That is
+not separable from noise at 0.05. **Treat Roll as a lead worth pursuing, not a settled result** —
+against the bar proxy's +0.036 it is clearly the better direction, and that is all it currently
+supports.
+
+**Coverage is anti-correlated with cost, which matters more than the rho.** Cross-tabbing drop reason
+against measured spread quartile:
+
+| quartile | spread % | estimable | too few trades | trending |
+|---|---|---:|---:|---:|
+| Q1 tightest | 0.20–1.85% | **75.8%** | 3 | 5 |
+| Q2 | 1.87–3.16% | 57.6% | 8 | 6 |
+| Q3 | 3.17–5.15% | **39.4%** | 11 | 9 |
+| Q4 widest | 5.20–10.57% | 60.6% | 12 | 1 |
+
+Median spread among estimable contracts **2.92%**, among dropped **3.81%**. The fall is not monotonic
+— Q3 is the worst — but the direction holds: **Roll goes silent more often where the book is wider,
+which is where cost matters most.** Any sweep charging Roll costs must register an imputation rule
+for unestimable contract-days before it runs, or cost is quietly absent on exactly the expensive
+names.
 
 **What this changes.** The spread estimator moves from *unfittable* to *estimable with stated error*.
 It does **not** make a backtested P&L quotable on its own: one session, 11 names, `rho` 0.500, and a
