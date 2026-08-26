@@ -60,6 +60,9 @@ emit capture  15 50 capture_nbbo.py
 emit cycle    16 05 run_cycle.py --deadline 2026-09-04
 # 16:45 — independent of the cycle, so a failed cycle still leaves a P&L row.
 emit snapshot 16 45 snapshot_equity.py
+# 09:00 - goes looking for the silence. A laptop asleep at 15:50 produces no capture, no
+# cycle and no equity row, and nothing says so, because nothing ran to say it.
+emit heartbeat 09 00 heartbeat.py --notify
 
 echo
 echo "Installed. Verify with:  launchctl list | grep tradesense"
