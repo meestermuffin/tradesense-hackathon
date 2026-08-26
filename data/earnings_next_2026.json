@@ -1,0 +1,42 @@
+{
+ "AAPL": {
+  "last": "2026-07-30",
+  "next_est": "2026-10-29",
+  "verdict": "clear"
+ },
+ "MSFT": {
+  "last": "2026-07-29",
+  "next_est": "2026-10-28",
+  "verdict": "clear"
+ },
+ "AMZN": {
+  "last": "2026-07-30",
+  "next_est": "2026-10-29",
+  "verdict": "clear"
+ },
+ "META": {
+  "last": "2026-07-29",
+  "next_est": "2026-10-28",
+  "verdict": "clear"
+ },
+ "GOOGL": {
+  "last": "2026-07-22",
+  "next_est": "2026-10-21",
+  "verdict": "clear"
+ },
+ "TSLA": {
+  "last": "2026-07-22",
+  "next_est": "2026-10-21",
+  "verdict": "clear"
+ },
+ "AMD": {
+  "last": "2026-08-04",
+  "next_est": "2026-11-03",
+  "verdict": "clear"
+ },
+ "INTC": {
+  "last": "2026-07-23",
+  "next_est": "2026-10-22",
+  "verdict": "clear"
+ }
+}
