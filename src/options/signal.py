@@ -3,7 +3,7 @@
 The measured result behind this: ranking on the per-name percentile carries rank IC +0.1753
 (permutation p 0.0010), while ranking on the raw IV *level* carries -0.1055 — selling whatever
 has the highest absolute IV is mildly harmful. The percentile is the signal; the level is not.
-See docs/probes/2026-08-26-baseline-ic-RESULTS.md
+See docs/measurement-log.md
 """
 
 PCT_WINDOW, PCT_MIN_OBS = 126, 63

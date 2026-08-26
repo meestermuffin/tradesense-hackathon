@@ -1,7 +1,7 @@
 """The traded universe — single source of truth.
 
 Decided 2026-08-26 on measured IV-series quality against criteria registered before any data was
-seen. Full derivation: docs/probes/2026-08-26-universe-quality-RESULTS.md
+seen. Full derivation: docs/measurement-log.md
 
 Exclusions and their re-entry conditions are in EXCLUDED below, which is enforced rather than
 described.
@@ -36,7 +36,7 @@ if _overlap:
         f"{sorted(_overlap)} appears in both UNIVERSE and EXCLUDED. "
         f"Reasons: {[EXCLUDED[n] for n in sorted(_overlap)]}. "
         f"Re-admitting a name needs a measurement, not an edit — see "
-        f"docs/probes/2026-08-26-universe-quality-RESULTS.md"
+        f"docs/measurement-log.md"
     )
 
 # 20% total defined risk / 2% per position = 10 concurrent positions, one per name.

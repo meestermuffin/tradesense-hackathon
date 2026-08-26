@@ -35,8 +35,9 @@ snapshot at 16:45, and a heartbeat at 09:00. Installed dry — arming takes
 `make schedule LIVE=1 ACCOUNT=<your account>`, and the account is baked into the plist as an
 assertion so swapping `.env` without re-installing aborts rather than trading the wrong book.
 
-**Data written by these is namespaced by account** (`data/nbbo/<account>/`, `data/equity/<account>.csv`,
-`data/selection/<account>/`), so running them alongside someone else's is safe.
+**Data written by these is namespaced by account** — captures under `data/nbbo/<account>/`,
+selection records under `data/selection/<account>/`, and one equity curve per account under
+`data/equity/`, each created on first run. Running them alongside someone else's is safe.
 
 **The one thing that is not safe: two machines armed live against the *same* account.** Each sizes
 against the same 20% risk budget independently, so the account carries double the intended exposure
@@ -54,16 +55,13 @@ operating machine needs `sudo pmset repeat wakeorpoweron MTWRF 15:40:00`.
 src/            data boundary, BS inverter, signal, selection, execution, risk
                 standard library only, no database driver — runs anywhere
 scripts/        measurement runners and the operational jobs
-docs/probes/    pre-registrations and results, one pair per measurement
-docs/           cost model, findings summary
-data/           IV series, earnings dates; captures and equity namespaced by account
+docs/           measurement log, cost model
+docs/pending/   registrations for measurements that have not run
+data/           IV series, earnings dates; captures namespaced by account
 ```
 
 `make` lists every target.
 
 ## Dependencies
 
-Runtime: **none.** Standard library only, which is why the measurements run on a fresh clone.
-
-Development: `ruff` for lint and formatting, installed separately (`pipx install ruff`). It is not
-imported by anything that ships.
+Development: `ruff` for lint and formatting, installed separately (`pipx install ruff`).

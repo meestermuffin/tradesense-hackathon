@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Baseline signal IC — protocol registered at docs/probes/2026-08-26-baseline-ic-registration.md
+"""Baseline signal IC — protocol registered at docs/measurement-log.md
 
 Reads the committed series through the data boundary, so it runs for anyone who clones the repo.
 """

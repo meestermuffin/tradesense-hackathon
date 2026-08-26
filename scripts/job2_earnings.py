@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Job 2 — does the ranking still separate once scheduled-event name-days are removed?
 
-Protocol: docs/probes/2026-08-26-baseline-ic-registration.md, addendum 2.
+Protocol: docs/measurement-log.md, addendum 2.
 """
 
 import json
