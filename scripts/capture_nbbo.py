@@ -60,11 +60,11 @@ def main():
     a = ap.parse_args()
 
     c = AlpacaClient()
-    account = c.account()["account_number"]
+    account = c.account().account_number
     clock = c.clock()
-    is_open = bool(clock.get("is_open"))
+    is_open = clock.is_open
     if not is_open and not a.force:
-        print(f"market closed (next open {clock.get('next_open')}) — not capturing.")
+        print(f"market closed (next open {clock.next_open}) — not capturing.")
         print("Quotes outside regular hours are stale and wide; capturing them would pollute the")
         print("spread model with data that describes the overnight book. Use --force to override.")
         return 0
@@ -84,21 +84,21 @@ def main():
                 continue
             chosen = {}
             for kind, grid in (("put", PUT_MONEYNESS), ("call", CALL_MONEYNESS)):
-                avail = [x for x in cs if x["type"] == kind]
+                avail = [x for x in cs if x.type == kind]
                 if not avail:
                     continue
                 for target in grid:
                     want = spot[s] * target
-                    best = min(avail, key=lambda x: abs(float(x["strike_price"]) - want))
-                    chosen[best["symbol"]] = best
+                    best = min(avail, key=lambda x: abs(x.strike_price - want))
+                    chosen[best.symbol] = best
             for k in chosen.values():
-                syms.append(k["symbol"])
-                meta[k["symbol"]] = dict(
+                syms.append(k.symbol)
+                meta[k.symbol] = dict(
                     underlying=s,
                     expiry=expiry,
                     tenor=tenor,
-                    strike=float(k["strike_price"]),
-                    type=k["type"],
+                    strike=k.strike_price,
+                    type=k.type,
                     spot=spot[s],
                 )
     if not syms:
@@ -109,11 +109,11 @@ def main():
     quotes = c.option_quotes_latest(syms)
     rows = []
     for sym, q in quotes.items():
-        bid, ask = q.get("bp", 0), q.get("ap", 0)
-        if bid <= 0 or ask <= 0 or ask < bid:
+        if not q.two_sided:
             continue  # a crossed or one-sided book is not a spread observation
+        bid, ask = q.bid, q.ask
         m = meta[sym]
-        mid = (bid + ask) / 2
+        mid = q.mid
         rows.append(
             dict(
                 captured_at=captured_at,

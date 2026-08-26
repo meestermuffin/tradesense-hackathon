@@ -20,13 +20,13 @@ from abc import ABC, abstractmethod
 
 class FeatureSource(ABC):
     @abstractmethod
-    def symbols(self):
+    def symbols(self) -> list[str]:
         """Universe available from this source."""
 
     @abstractmethod
-    def closes(self, symbol):
+    def closes(self, symbol: str) -> dict[str, float]:
         """{'YYYY-MM-DD': close} for the underlying."""
 
     @abstractmethod
-    def iv_series(self, symbol):
+    def iv_series(self, symbol: str) -> list[tuple[str, float]]:
         """[(day, iv)] in chronological order, trailing-only by construction."""

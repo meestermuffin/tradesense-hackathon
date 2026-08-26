@@ -12,6 +12,7 @@ the day. A book of ten short put spreads has ten positions and about two bets.
 So `max_loss x positions` is not a tail scenario for this book. It is a bad Tuesday.
 """
 
+from .models import BookPosition, BookProfile, Exposure, StressResult
 from .options.iv import greeks
 
 CONTRACT_MULTIPLIER = 100
@@ -28,20 +29,22 @@ def effective_bets(n, rho=MEAN_PAIRWISE_CORRELATION):
     return n / (1 + (n - 1) * rho)
 
 
-def position_exposure(spot, short_strike, long_strike, iv, T, r, cp, contracts):
+def position_exposure(spot, short_strike, long_strike, iv, T, r, cp, contracts) -> Exposure:
     """Net greeks for one vertical, signed for a short-premium structure."""
     s = greeks(spot, short_strike, T, r, iv, cp)
     lo = greeks(spot, long_strike, T, r, iv, cp)
     mult = CONTRACT_MULTIPLIER * contracts
-    return {k: (lo[k] - s[k]) * mult for k in s}
+    return Exposure(**{k: (lo[k] - s[k]) * mult for k in ("delta", "gamma", "vega", "theta")})
 
 
-def book_profile(positions, equity):
-    """positions: iterable of dicts from position_exposure(), plus max_loss per position."""
-    agg = {k: sum(p["exposure"][k] for p in positions) for k in ("delta", "gamma", "vega", "theta")}
+def book_profile(positions: list[BookPosition], equity) -> BookProfile:
+    agg = {
+        k: sum(getattr(p.exposure, k) for p in positions)
+        for k in ("delta", "gamma", "vega", "theta")
+    }
     n = len(positions)
-    worst = sum(p["max_loss"] for p in positions)
-    return dict(
+    worst = sum(p.max_loss for p in positions)
+    return BookProfile(
         positions=n,
         effective_bets=round(effective_bets(n), 2),
         net_delta=round(agg["delta"], 1),
@@ -56,7 +59,9 @@ def book_profile(positions, equity):
     )
 
 
-def stress(positions, equity, vol_points=10.0, underlying_move_pct=-7.0):
+def stress(
+    positions: list[BookPosition], equity, vol_points=10.0, underlying_move_pct=-7.0
+) -> StressResult:
     """First-order shock. Deliberately crude, and labelled as such.
 
     Greeks are local. A 7% move with vol up 10 points is well outside where a delta-vega
@@ -64,14 +69,12 @@ def stress(positions, equity, vol_points=10.0, underlying_move_pct=-7.0):
     -7% default is not arbitrary: it is what this universe actually did on 2025-04-04, when all
     eleven names fell together.
     """
-    agg = {k: sum(p["exposure"][k] for p in positions) for k in ("delta", "vega")}
-    spot_pnl = sum(
-        p["exposure"]["delta"] * p["spot"] * (underlying_move_pct / 100.0) for p in positions
-    )
-    vega_pnl = agg["vega"] * vol_points
+    vega = sum(p.exposure.vega for p in positions)
+    spot_pnl = sum(p.exposure.delta * p.spot * (underlying_move_pct / 100.0) for p in positions)
+    vega_pnl = vega * vol_points
     total = spot_pnl + vega_pnl
-    capped = -sum(p["max_loss"] for p in positions)
-    return dict(
+    capped = -sum(p.max_loss for p in positions)
+    return StressResult(
         scenario=f"underlying {underlying_move_pct:+.1f}%, implied vol {vol_points:+.0f} points",
         delta_pnl=round(spot_pnl, 0),
         vega_pnl=round(vega_pnl, 0),

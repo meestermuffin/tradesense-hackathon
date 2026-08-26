@@ -30,10 +30,8 @@ def check(label, fn, expect_fail=False):
 def main():
     c = AlpacaClient()
     a = c.account()
-    print(f"account {a['account_number']}  status {a['status']}  equity ${float(a['equity']):,.2f}")
-    print(
-        f"options approval level {a.get('options_approved_level')}  (3 is required for spreads)\n"
-    )
+    print(f"account {a.account_number}  status {a.status}  equity ${a.equity:,.2f}")
+    print(f"options approval level {a.options_approved_level}  (3 is required for spreads)\n")
 
     results = []
 
@@ -68,8 +66,8 @@ def main():
         check(
             "account has options level 3",
             lambda: (
-                int(a.get("options_approved_level") or 0) >= 3,
-                f"level {a.get('options_approved_level')}",
+                (a.options_approved_level or 0) >= 3,
+                f"level {a.options_approved_level}",
             ),
         )
     )

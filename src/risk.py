@@ -11,6 +11,7 @@ Exits are: structural max loss (defined at entry), the portfolio kill switch, ti
 import datetime
 import math
 
+from .models import Account, PortfolioState, Position, Spread
 from .universe import (
     KILL_SWITCH_DRAWDOWN_PCT,
     MAX_LOSS_PER_POSITION_PCT,
@@ -45,16 +46,20 @@ def size_position(equity, width, credit):
 
 
 def check_entry(
-    candidate,
+    candidate: Spread,
     equity,
-    open_positions,
+    held,
     existing_risk,
     high_water,
     earnings_dates=None,
     as_of=None,
     deadline=None,
 ):
-    """Return (contracts, [reasons to refuse]). An empty reason list means the trade may go."""
+    """Return (contracts, [reasons to refuse]). An empty reason list means the trade may go.
+
+    `held` is the set of underlyings already open. It was a list of one-key dicts built at the call
+    site purely so this function could read `["underlying"]` back out of it.
+    """
     as_of = as_of or datetime.date.today()
     reasons = []
 
@@ -65,27 +70,28 @@ def check_entry(
             f"{KILL_SWITCH_DRAWDOWN_PCT * 100:.0f}% — flatten, open nothing"
         )
 
-    if len(open_positions) >= MAX_OPEN_POSITIONS:
-        reasons.append(f"{len(open_positions)} open, cap is {MAX_OPEN_POSITIONS}")
+    held = set(held)
+    if len(held) >= MAX_OPEN_POSITIONS:
+        reasons.append(f"{len(held)} open, cap is {MAX_OPEN_POSITIONS}")
 
-    sym = candidate["underlying"]
-    if any(p.get("underlying") == sym for p in open_positions):
+    sym = candidate.underlying
+    if sym in held:
         reasons.append(f"already holding {sym} — doubling up concentrates the risk the cap spreads")
 
-    n, why = size_position(equity, candidate["width"], candidate["credit_mid"])
+    n, why = size_position(equity, candidate.width, candidate.credit_mid)
     if why:
         reasons.append(why)
         n = 0
 
     if n:
-        new_risk = defined_risk(candidate["width"], candidate["credit_mid"], n)
+        new_risk = defined_risk(candidate.width, candidate.credit_mid, n)
         if existing_risk + new_risk > equity * MAX_TOTAL_DEFINED_RISK_PCT:
             reasons.append(
                 f"total defined risk ${existing_risk + new_risk:.0f} would exceed "
                 f"{MAX_TOTAL_DEFINED_RISK_PCT * 100:.0f}% of ${equity:.0f}"
             )
 
-    expiry = datetime.date.fromisoformat(candidate["expiry"])
+    expiry = candidate.expiry
     if deadline and expiry > deadline:
         reasons.append(f"expires {expiry} past the deadline {deadline}")
 
@@ -98,7 +104,9 @@ def check_entry(
     return (0 if reasons else n), reasons
 
 
-def portfolio_state(account, positions):
-    equity = float(account["equity"])
-    last = float(account.get("last_equity") or equity)
-    return dict(equity=equity, last_equity=last, open_count=len(positions))
+def portfolio_state(account: Account, positions: list[Position]) -> PortfolioState:
+    return PortfolioState(
+        equity=account.equity,
+        last_equity=account.last_equity if account.last_equity is not None else account.equity,
+        open_count=len(positions),
+    )

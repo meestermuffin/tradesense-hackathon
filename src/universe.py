@@ -7,6 +7,8 @@ Exclusions and their re-entry conditions are in EXCLUDED below, which is enforce
 described.
 """
 
+from .models import RiskLimits
+
 UNIVERSE = ["SPY", "TSLA", "NVDA", "MSFT", "AAPL", "META", "AMZN", "INTC", "GOOGL", "AMD", "MU"]
 
 # Excluded names, and what would have to change for each to come back.
@@ -42,7 +44,17 @@ if _overlap:
 # 20% total defined risk / 2% per position = 10 concurrent positions, one per name.
 # The live risk_config value of 0 and the column default of 5 are both inherited from the
 # shelved equity strategy and were never derived for this book.
-MAX_OPEN_POSITIONS = 10
-MAX_LOSS_PER_POSITION_PCT = 0.02
-MAX_TOTAL_DEFINED_RISK_PCT = 0.20
-KILL_SWITCH_DRAWDOWN_PCT = 0.05
+#
+# Validated on construction, so a limit edited to something incoherent (a negative cap, a
+# percentage entered as 20 rather than 0.20) fails at import rather than at the first trade.
+LIMITS = RiskLimits(
+    max_open_positions=10,
+    max_loss_per_position_pct=0.02,
+    max_total_defined_risk_pct=0.20,
+    kill_switch_drawdown_pct=0.05,
+)
+
+MAX_OPEN_POSITIONS = LIMITS.max_open_positions
+MAX_LOSS_PER_POSITION_PCT = LIMITS.max_loss_per_position_pct
+MAX_TOTAL_DEFINED_RISK_PCT = LIMITS.max_total_defined_risk_pct
+KILL_SWITCH_DRAWDOWN_PCT = LIMITS.kill_switch_drawdown_pct

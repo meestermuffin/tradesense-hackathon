@@ -1,4 +1,9 @@
-"""Thin Alpaca client. Standard library only — no SDK, no database driver.
+"""Thin Alpaca client. No SDK, no database driver — urllib and pydantic.
+
+Responses are parsed into the models in `src.models` rather than handed on as dicts. That is not
+decoration: the failure this project keeps hitting is a **missing key in an otherwise-200 response**
+(greeks and IV are simply absent without an OPRA agreement), and a dict answers `.get` with None and
+lets the run continue. Parsing raises at the boundary instead, where the response is still in scope.
 
 Facts encoded here that cost time to learn, so they are not re-learned:
 
@@ -23,6 +28,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+from ..models import Account, Clock, OptionContract, Order, Position, Quote
 
 DATA_HOST = "https://data.alpaca.markets"
 PAPER_HOST = "https://paper-api.alpaca.markets"
@@ -112,14 +119,15 @@ class AlpacaClient:
         return out
 
     # ---- account and clock ----
-    def account(self):
-        return self.request("GET", self.trade_host, "/v2/account")
+    def account(self) -> Account:
+        return Account.model_validate(self.request("GET", self.trade_host, "/v2/account"))
 
-    def clock(self):
-        return self.request("GET", self.trade_host, "/v2/clock")
+    def clock(self) -> Clock:
+        return Clock.model_validate(self.request("GET", self.trade_host, "/v2/clock"))
 
-    def positions(self):
-        return self.request("GET", self.trade_host, "/v2/positions")
+    def positions(self) -> list[Position]:
+        raw = self.request("GET", self.trade_host, "/v2/positions")
+        return [Position.model_validate(p) for p in raw]
 
     # ---- market data ----
     def stock_closes_latest(self, symbols):
@@ -142,14 +150,14 @@ class AlpacaClient:
         strike_lte=None,
         status="active",
         limit=10000,
-    ):
+    ) -> list[OptionContract]:
         """Contract metadata — TRADING host. `status='inactive'` is what reaches past expiries.
 
         **Pass an expiry bound.** With no `expiration_date`/`exp_lte`, the endpoint silently
         defaults `expiration_date_lte` to next weekend, so "list all expiries" quietly returns only
         the next few days and every downstream DTE filter comes back empty with no error.
         """
-        return self._paged(
+        raw = self._paged(
             self.trade_host,
             "/v2/options/contracts",
             "option_contracts",
@@ -165,10 +173,11 @@ class AlpacaClient:
                 "limit": limit,
             },
         )
+        return [OptionContract.model_validate(c) for c in raw]
 
-    def option_quotes_latest(self, symbols):
+    def option_quotes_latest(self, symbols) -> dict[str, Quote]:
         """Latest NBBO. There is no historical equivalent — capture at the time or lose it."""
-        out = {}
+        out: dict[str, Quote] = {}
         for i in range(0, len(symbols), QUOTE_BATCH):
             d = self.request(
                 "GET",
@@ -176,7 +185,8 @@ class AlpacaClient:
                 "/v1beta1/options/quotes/latest",
                 {"symbols": ",".join(symbols[i : i + QUOTE_BATCH])},
             )
-            out.update(d.get("quotes") or {})
+            for sym, q in (d.get("quotes") or {}).items():
+                out[sym] = Quote.model_validate(q)
         return out
 
     @staticmethod
@@ -214,24 +224,26 @@ class AlpacaClient:
         return out
 
     # ---- orders ----
-    def submit_mleg(self, legs, qty, limit_price, tif="day"):
+    def submit_mleg(self, legs, qty, limit_price, tif="day") -> Order:
         """Multi-leg order. limit_price is NET: positive = debit, negative = credit."""
-        return self.request(
-            "POST",
-            self.trade_host,
-            "/v2/orders",
-            body={
-                "order_class": "mleg",
-                "qty": str(qty),
-                "type": "limit",
-                "limit_price": f"{limit_price:.2f}",
-                "time_in_force": tif,
-                "legs": legs,
-            },
+        return Order.model_validate(
+            self.request(
+                "POST",
+                self.trade_host,
+                "/v2/orders",
+                body={
+                    "order_class": "mleg",
+                    "qty": str(qty),
+                    "type": "limit",
+                    "limit_price": f"{limit_price:.2f}",
+                    "time_in_force": tif,
+                    "legs": legs,
+                },
+            )
         )
 
-    def get_order(self, order_id):
-        return self.request("GET", self.trade_host, f"/v2/orders/{order_id}")
+    def get_order(self, order_id) -> Order:
+        return Order.model_validate(self.request("GET", self.trade_host, f"/v2/orders/{order_id}"))
 
     def cancel_order(self, order_id):
         try:
@@ -240,10 +252,9 @@ class AlpacaClient:
         except AlpacaError as e:
             return e.status in (404, 422)
 
-    def open_orders(self, limit=100):
-        return self.request(
-            "GET", self.trade_host, "/v2/orders", {"status": "open", "limit": limit}
-        )
+    def open_orders(self, limit=100) -> list[Order]:
+        raw = self.request("GET", self.trade_host, "/v2/orders", {"status": "open", "limit": limit})
+        return [Order.model_validate(o) for o in raw]
 
 
 def leg(symbol, side, intent, ratio=1):

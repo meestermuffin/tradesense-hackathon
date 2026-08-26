@@ -18,13 +18,13 @@ class FileFeatureSource(FeatureSource):
                 self._rows = list(csv.DictReader(fh))
         return self._rows
 
-    def symbols(self):
+    def symbols(self) -> list[str]:
         return sorted({r["symbol"] for r in self._load()})
 
-    def closes(self, symbol):
+    def closes(self, symbol: str) -> dict[str, float]:
         return {r["day"]: float(r["spot"]) for r in self._load() if r["symbol"] == symbol}
 
-    def iv_series(self, symbol):
+    def iv_series(self, symbol: str) -> list[tuple[str, float]]:
         return [
             (r["day"], float(r["iv"])) for r in self._load() if r["symbol"] == symbol and r["iv"]
         ]

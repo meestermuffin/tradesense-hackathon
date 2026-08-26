@@ -71,7 +71,8 @@ operating machine needs `sudo pmset repeat wakeorpoweron MTWRF 15:40:00`.
 
 ```
 src/            data boundary, BS inverter, signal, selection, execution, risk
-                standard library only, no database driver — runs anywhere
+                pydantic models at the edges, no database driver — runs anywhere
+src/models.py   every shape that crosses a boundary, in one file
 scripts/        measurement runners and the operational jobs
 docs/           measurement log, cost model
 docs/pending/   registrations for measurements that have not run
@@ -81,6 +82,30 @@ ui/             the dashboard — Next.js, credentials server-side only
 
 `make` lists every target.
 
+## Setup
+
+[uv](https://docs.astral.sh/uv/) manages the Python side. From a fresh clone:
+
+```bash
+uv sync                 # creates .venv from uv.lock — pydantic, plus ruff for development
+make verify             # confirms your Alpaca account has the entitlements the project needs
+make cycle              # dry run: rank, select, size. Places nothing.
+```
+
+Every `make` target runs through `uv run`, so there is no virtualenv to activate. To run a script
+directly, prefix it: `uv run python scripts/heartbeat.py`.
+
+Credentials come from a gitignored `.env` at the repo root (`ALPACA_KEY_ID`, `ALPACA_SECRET_KEY`),
+which is also where the scheduled jobs read them — `launchd` gives a job almost no environment.
+
 ## Dependencies
 
-Development: `ruff` for lint and formatting, installed separately (`pipx install ruff`).
+Runtime: **pydantic**, and nothing else. It parses Alpaca responses at the boundary, which matters
+here because the recurring failure on this API is a *missing key in an otherwise-200 response* —
+`greeks` and `impliedVolatility` are simply absent without an OPRA agreement, and a plain dict
+answers `.get()` with `None` and lets the run continue on a number that was never served.
+
+`src/` was standard-library-only until 2026-08-26. That bought a clone-and-run repo and cost
+validation at the one place it earns its keep. No database driver, still — that rule is unchanged.
+
+Development: `ruff` for lint and formatting, pinned in `uv.lock` and run via `make lint` / `make fmt`.

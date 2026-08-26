@@ -28,18 +28,18 @@ def main():
     a = c.account()
     pos = c.positions()
     os.makedirs(OUTDIR, exist_ok=True)
-    out = os.path.join(OUTDIR, f"{a['account_number']}.csv")
+    out = os.path.join(OUTDIR, f"{a.account_number}.csv")
     row = dict(
         day=datetime.date.today().isoformat(),
         host=platform.node(),
         captured_at=datetime.datetime.now(datetime.UTC).isoformat(),
-        account=a["account_number"],
-        equity=a["equity"],
-        last_equity=a.get("last_equity"),
-        cash=a["cash"],
-        position_market_value=a.get("position_market_value"),
+        account=a.account_number,
+        equity=a.equity,
+        last_equity=a.last_equity,
+        cash=a.cash,
+        position_market_value=a.position_market_value,
         open_legs=len(pos),
-        symbols="|".join(sorted(p["symbol"] for p in pos)),
+        symbols="|".join(sorted(p.symbol for p in pos)),
     )
     new = not os.path.exists(out)
     with open(out, "a", newline="") as fh:

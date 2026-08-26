@@ -66,8 +66,8 @@ def check_account(acct, day):
         notes.append("equity   row present")
     else:
         problems.append(
-            f"NO EQUITY ROW for {iso}. Sharpe and max drawdown are computed from "
-            f"consecutive daily returns; a gap distorts both."
+            f"NO EQUITY ROW for {iso}. Max drawdown runs against a running peak, "
+            f"so a missing session moves the peak and understates it."
         )
     return problems, notes
 

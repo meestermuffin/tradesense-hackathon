@@ -12,6 +12,7 @@ tomorrow the same session appears in bars, and the two can be compared directly.
 
 import datetime
 
+from ..models import LiveIVReading
 from .iv import implied_vol
 from .selection import RATE
 
@@ -19,7 +20,7 @@ DTE_LO, DTE_HI, DTE_TARGET = 21, 45, 30
 MNY_LO, MNY_HI = 0.95, 1.05
 
 
-def live_iv(client, symbol, spot, as_of=None):
+def live_iv(client, symbol, spot, as_of=None) -> tuple[LiveIVReading | None, str | None]:
     """Mirror the series construction: Friday expiry nearest 30 DTE, nearest-ATM strike in band,
     call/put mean. Returns None with a reason rather than guessing."""
     as_of = as_of or datetime.date.today()
@@ -30,27 +31,18 @@ def live_iv(client, symbol, spot, as_of=None):
         status="active",
         limit=10000,
     )
-    fridays = sorted(
-        {
-            c["expiration_date"]
-            for c in chain
-            if datetime.date.fromisoformat(c["expiration_date"]).weekday() == 4
-        }
-    )
+    fridays = sorted({c.expiration_date for c in chain if c.expiration_date.weekday() == 4})
     if not fridays:
         return None, f"no Friday expiry in {DTE_LO}-{DTE_HI} DTE"
-    expiry = min(
-        fridays, key=lambda e: abs((datetime.date.fromisoformat(e) - as_of).days - DTE_TARGET)
-    )
-    T = (datetime.date.fromisoformat(expiry) - as_of).days / 365.0
+    expiry = min(fridays, key=lambda e: abs((e - as_of).days - DTE_TARGET))
+    T = (expiry - as_of).days / 365.0
 
     by_strike = {}
     for c in chain:
-        if c["expiration_date"] != expiry:
+        if c.expiration_date != expiry:
             continue
-        K = float(c["strike_price"])
-        if MNY_LO <= K / spot <= MNY_HI:
-            by_strike.setdefault(K, {})[c["type"]] = c["symbol"]
+        if MNY_LO <= c.strike_price / spot <= MNY_HI:
+            by_strike.setdefault(c.strike_price, {})[c.type] = c.symbol
     if not by_strike:
         return None, "no in-band strike"
 
@@ -62,13 +54,13 @@ def live_iv(client, symbol, spot, as_of=None):
         for cp, key in (("C", "call"), ("P", "put")):
             s = pair.get(key)
             q = quotes.get(s) if s else None
-            if not q or q.get("bp", 0) <= 0 or q.get("ap", 0) <= 0:
+            if q is None or not q.two_sided:
                 continue
-            v = implied_vol((q["bp"] + q["ap"]) / 2, spot, K, T, RATE, cp)
+            v = implied_vol(q.mid, spot, K, T, RATE, cp)
             if v:
                 ivs.append(v)
         if ivs:
-            return dict(
+            return LiveIVReading(
                 iv=sum(ivs) / len(ivs),
                 strike=K,
                 expiry=expiry,

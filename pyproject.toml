@@ -1,6 +1,25 @@
-# Lint and format config. Ruff only — one tool for both, MIT licensed, and installed via pipx so it
-# never becomes a runtime dependency. Nothing under src/ may import anything outside the standard
-# library; that rule is about what ships, and a dev tool does not ship.
+[project]
+name = "tradesense"
+version = "0.1.0"
+description = "Options volatility-premium trading agent — Alpaca AI Trading Agents Hackathon"
+requires-python = ">=3.13"
+license = "MIT"
+dependencies = [
+    "pydantic>=2.9",
+]
+
+[tool.uv]
+package = false
+
+# Runtime dependency policy: pydantic, and nothing else without a reason written here.
+#
+# src/ was standard-library-only until 2026-08-26. That guarantee bought a clone-and-run repo; it
+# cost validation at the one place it matters, which is where Alpaca JSON crosses into this code.
+# An absent `greeks` key on an otherwise-200 response is this project's most-repeated failure, and
+# a dict silently returning None for it is exactly how that failure stays quiet. Pydantic makes the
+# boundary raise instead.
+#
+# No database driver, still. That rule is unchanged and is about what teammates can run.
 
 [tool.ruff]
 line-length = 100
@@ -34,3 +53,8 @@ ignore = [
 [tool.ruff.format]
 quote-style = "double"
 docstring-code-format = true
+
+[dependency-groups]
+dev = [
+    "ruff>=0.6",
+]

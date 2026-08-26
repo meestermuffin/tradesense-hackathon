@@ -18,6 +18,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.data.alpaca import AlpacaClient
 from src.data.files import FileFeatureSource
+from src.models import Rejection, Template
 from src.options import execution
 from src.options.live_iv import live_iv
 from src.options.selection import select_vertical
@@ -29,7 +30,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOCK = os.path.join(ROOT, ".cycle.lock")
 LOGDIR = os.path.join(ROOT, "logs")
 
-TEMPLATE = dict(
+TEMPLATE = Template(
     structure="put_credit",
     target_delta=0.25,
     width=5.0,
@@ -97,15 +98,15 @@ def main():
         positions = c.positions()
         state = portfolio_state(acct, positions)
         print(
-            f"account     {acct['account_number']}  equity ${state['equity']:,.2f}  "
-            f"open legs {len(positions)}  market_open={clock.get('is_open')}"
+            f"account     {acct.account_number}  equity ${state.equity:,.2f}  "
+            f"open legs {len(positions)}  market_open={clock.is_open}"
         )
-        if a.expect_account and acct["account_number"] != a.expect_account:
+        if a.expect_account and acct.account_number != a.expect_account:
             # The credentials in .env do not announce which account they belong to. Trading a
             # rehearsal into the judged book, or the reverse, is silent and unrecoverable.
             print(
                 f"ABORT: expected account {a.expect_account}, credentials resolve to "
-                f"{acct['account_number']}. Refusing to trade the wrong book."
+                f"{acct.account_number}. Refusing to trade the wrong book."
             )
             return 3
         print(f"mode        {'LIVE — orders will be placed' if a.live else 'DRY RUN — no orders'}")
@@ -131,96 +132,94 @@ def main():
                 continue
             got, why = live_iv(c, sym, spots[sym])
             if got:
-                hist.setdefault(sym, []).append((datetime.date.today().isoformat(), got["iv"]))
+                hist.setdefault(sym, []).append((datetime.date.today().isoformat(), got.iv))
             else:
                 print(f"  {sym}: no live IV ({why}) — ranked on history through yesterday")
 
         ranked = rank_universe(hist)
         print("\nrank  name   IV       pct    obs")
         for i, r in enumerate(ranked, 1):
-            if not r["eligible"]:
-                print(f"  --  {r['symbol']:5}  ineligible: {r['reason']}")
+            if not r.eligible:
+                print(f"  --  {r.symbol:5}  ineligible: {r.reason}")
                 continue
-            print(
-                f"  {i:2} {r['symbol']:5} {r['iv'] * 100:6.2f}% {r['percentile']:5.1f} {r['obs']}"
-            )
+            print(f"  {i:2} {r.symbol:5} {r.iv * 100:6.2f}% {r.percentile:5.1f} {r.obs}")
 
-        held = {p["symbol"][: len(p["symbol"])] for p in positions}
+        # Underlyings, not contract symbols. A position's `symbol` is the OCC contract, so
+        # comparing it to a candidate's underlying never matches and the per-name cap never binds.
+        held = {p.underlying for p in positions}
         existing_risk = 0.0
         deadline = datetime.date.fromisoformat(a.deadline) if a.deadline else None
         placed = 0
         decisions = []
         print()
-        for r in [x for x in ranked if x["eligible"]][: a.top]:
-            sym = r["symbol"]
+        for r in [x for x in ranked if x.eligible][: a.top]:
+            sym = r.symbol
             cand = select_vertical(c, sym, spots[sym], TEMPLATE)
-            if cand.get("rejected"):
-                print(f"  {sym:5} no structure: {cand['rejected']}")
-                decisions.append(dict(symbol=sym, outcome="rejected", why=cand["rejected"]))
+            if isinstance(cand, Rejection):
+                print(f"  {sym:5} no structure: {cand.reason}")
+                decisions.append(dict(symbol=sym, outcome="rejected", why=cand.reason))
                 continue
             n, reasons = check_entry(
                 cand,
-                state["equity"],
-                [{"underlying": p} for p in held],
+                state.equity,
+                held,
                 existing_risk,
-                state["equity"],
+                state.equity,
                 deadline=deadline,
             )
             head = (
-                f"  {sym:5} {cand['expiry']} {cand['short']['strike']:g}/"
-                f"{cand['long']['strike']:g} d={cand['short_delta']:+.2f} "
-                f"credit {cand['credit_mid']:.2f} (touch {cand['credit_touch']:.2f}) "
-                f"maxloss {cand['max_loss']:.2f}"
+                f"  {sym:5} {cand.expiry} {cand.short.strike:g}/"
+                f"{cand.long.strike:g} d={cand.short_delta:+.2f} "
+                f"credit {cand.credit_mid:.2f} (touch {cand.credit_touch:.2f}) "
+                f"maxloss {cand.max_loss:.2f}"
             )
             if reasons:
                 print(head + "  REFUSED: " + "; ".join(reasons))
                 decisions.append(dict(symbol=sym, outcome="refused", why=reasons))
                 continue
-            print(
-                head + f" -> {n}x risk ${defined_risk(cand['width'], cand['credit_mid'], n):,.0f}"
-            )
+            print(head + f" -> {n}x risk ${defined_risk(cand.width, cand.credit_mid, n):,.0f}")
             decisions.append(
                 dict(
                     symbol=sym,
                     outcome="selected",
                     contracts=n,
-                    expiry=cand["expiry"],
-                    delta=cand["short_delta"],
-                    credit_mid=cand["credit_mid"],
-                    max_loss=cand["max_loss"],
+                    expiry=cand.expiry,
+                    delta=cand.short_delta,
+                    credit_mid=cand.credit_mid,
+                    max_loss=cand.max_loss,
                 )
             )
-            existing_risk += defined_risk(cand["width"], cand["credit_mid"], n)
+            existing_risk += defined_risk(cand.width, cand.credit_mid, n)
             held.add(sym)
             if a.live:
                 rec = execution.place(
                     c,
                     cand,
                     n,
-                    log_dir=os.path.join(LOGDIR, acct["account_number"]),
+                    log_dir=os.path.join(LOGDIR, acct.account_number),
                 )
                 print(
-                    f"        {rec.get('status')} fill={rec.get('fill')} "
-                    f"vs_mid={rec.get('vs_mid')} vs_touch={rec.get('vs_touch')}"
+                    f"        {rec.status} fill={rec.fill} "
+                    f"vs_mid={rec.vs_mid} vs_touch={rec.vs_touch}"
                 )
-                if not rec.get("filled"):
+                if not rec.filled:
                     execution.cancel_if_resting(c, rec)
                     print("        did not fill — cancelled rather than left resting")
                 else:
                     placed += 1
         print(f"\n{'placed' if a.live else 'would place'} {placed if a.live else len(held)} pos")
         if not a.no_artifact:
-            sel = os.path.join(ROOT, "data", "selection", acct["account_number"])
+            sel = os.path.join(ROOT, "data", "selection", acct.account_number)
             os.makedirs(sel, exist_ok=True)
             out = os.path.join(sel, f"selection_{datetime.date.today().isoformat()}.json")
             json.dump(
                 dict(
                     run_at=datetime.datetime.now(datetime.UTC).isoformat(),
-                    account=acct["account_number"],
+                    account=acct.account_number,
                     host=platform.node(),
-                    market_open=clock.get("is_open"),
+                    market_open=clock.is_open,
                     live=a.live,
-                    template=TEMPLATE,
+                    template=TEMPLATE.model_dump(),
                     decisions=decisions,
                 ),
                 open(out, "w"),

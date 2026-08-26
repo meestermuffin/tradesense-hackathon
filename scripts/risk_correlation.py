@@ -24,7 +24,7 @@ SPLIT_LO, SPLIT_HI = 0.5, 2.0  # far outside any real single-session move
 
 def corr(a, b):
     ma, mb = st.mean(a), st.mean(b)
-    num = sum((x - ma) * (y - mb) for x, y in zip(a, b))
+    num = sum((x - ma) * (y - mb) for x, y in zip(a, b, strict=False))
     da = math.sqrt(sum((x - ma) ** 2 for x in a))
     db = math.sqrt(sum((y - mb) ** 2 for y in b))
     return num / (da * db) if da and db else float("nan")
@@ -62,7 +62,8 @@ def main():
     n = len(syms)
 
     print(
-        f"{os.path.basename(path)}  {n} names  {len(keep)} sessions  ({dropped} split-sized dropped)\n"
+        f"{os.path.basename(path)}  {n} names  {len(keep)} sessions  "
+        f"({dropped} split-sized dropped)\n"
     )
     print("  pairwise daily-return correlation")
     print(

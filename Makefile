@@ -3,7 +3,7 @@
 # The scheduled agents and these targets invoke the same scripts, so a manual run and a scheduled
 # run cannot drift. Run `make` for the list.
 
-PY       := python3
+PY       := uv run --quiet python
 ROOT     := $(shell pwd)
 DEADLINE ?= 2026-09-04
 LIVE     ?= 0
@@ -154,11 +154,11 @@ logs:  ## tail the scheduled-job logs
 # Each is still doable by hand when it is genuinely wanted; see docs or run the command directly.
 
 lint:  ## report lint issues without changing anything
-	@ruff check . && ruff format --check . && echo "  clean"
+	@uv run ruff check . && uv run ruff format --check . && echo "  clean"
 
 fmt:  ## fix what can be fixed automatically, then format
-	@ruff check . --fix
-	@ruff format .
+	@uv run ruff check . --fix
+	@uv run ruff format .
 	@echo "  run 'make check' to confirm nothing broke"
 
 roll:  ## estimate effective spread from trade sequences, validate against the latest capture
