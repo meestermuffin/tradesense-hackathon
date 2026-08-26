@@ -3,17 +3,41 @@
 Decided 2026-08-26 on measured IV-series quality against criteria registered before any data was
 seen. Full derivation: docs/probes/2026-08-26-universe-quality-RESULTS.md
 
-Excluded and why, so neither gets re-added by accident:
-  AVGO  17.2% missing days (CONDITIONAL) and reports 2 Sep, inside the judged window
-  NFLX  21.2% missing days (CONDITIONAL) and the only name the estimator diagnostic called ambiguous
+Exclusions and their re-entry conditions are in EXCLUDED below, which is enforced rather than
+described.
 """
 
 UNIVERSE = ["SPY", "TSLA", "NVDA", "MSFT", "AAPL", "META", "AMZN", "INTC", "GOOGL", "AMD", "MU"]
 
+# Excluded names, and what would have to change for each to come back.
+#
+# Kept as data rather than prose because it is checked below — a comment cannot stop anyone adding
+# a name back, and that is the only failure this is guarding against.
+#
+# Note the two are not equally settled. NFLX failed on two grounds that both still hold. AVGO failed
+# on two grounds, one of which **expires with the judged window**: after 2026-09-04 its earnings
+# reason is spent and only the coverage reading remains, which was CONDITIONAL rather than FAIL.
+# AVGO is therefore a legitimate candidate for reconsideration after the window, on the same footing
+# as NFLX, and that is a measurement question rather than a settled exclusion.
 EXCLUDED = {
-    "AVGO": "coverage CONDITIONAL (17.2% missing); earnings 2026-09-02, inside the window",
-    "NFLX": "coverage CONDITIONAL (21.2% missing); estimator diagnostic ambiguous",
+    "AVGO": {
+        "durable": "coverage CONDITIONAL — 17.2% of sessions missing",
+        "expires_2026_09_04": "reports 2026-09-02, inside the judged window",
+    },
+    "NFLX": {
+        "durable": "coverage CONDITIONAL — 21.2% missing; and the only name the print-agreement "
+        "diagnostic called ambiguous",
+    },
 }
+
+_overlap = set(UNIVERSE) & set(EXCLUDED)
+if _overlap:
+    raise ValueError(
+        f"{sorted(_overlap)} appears in both UNIVERSE and EXCLUDED. "
+        f"Reasons: {[EXCLUDED[n] for n in sorted(_overlap)]}. "
+        f"Re-admitting a name needs a measurement, not an edit — see "
+        f"docs/probes/2026-08-26-universe-quality-RESULTS.md"
+    )
 
 # 20% total defined risk / 2% per position = 10 concurrent positions, one per name.
 # The live risk_config value of 0 and the column default of 5 are both inherited from the

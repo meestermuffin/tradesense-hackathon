@@ -1,0 +1,84 @@
+{
+ "run_at": "2026-08-26T21:49:40.824102+00:00",
+ "account": "PA382RL5C7X8",
+ "market_open": false,
+ "live": false,
+ "template": {
+  "structure": "put_credit",
+  "target_delta": 0.25,
+  "width": 5.0,
+  "max_width": 25.0,
+  "dte_min": 5,
+  "dte_max": 9,
+  "max_spread_pct": 0.08,
+  "delta_tolerance": 0.15
+ },
+ "decisions": [
+  {
+   "symbol": "META",
+   "outcome": "rejected",
+   "why": "nearest delta 0.41 vs target 0.25; only 7/88 strikes passed quality, spanning delta 0.41-0.97"
+  },
+  {
+   "symbol": "NVDA",
+   "outcome": "selected",
+   "contracts": 5,
+   "expiry": "2026-09-02",
+   "delta": -0.2679,
+   "credit_mid": 1.205,
+   "max_loss": 3.795
+  },
+  {
+   "symbol": "AAPL",
+   "outcome": "rejected",
+   "why": "nearest delta 0.64 vs target 0.25; only 4/46 strikes passed quality, spanning delta 0.64-0.96"
+  },
+  {
+   "symbol": "AMD",
+   "outcome": "selected",
+   "contracts": 5,
+   "expiry": "2026-09-02",
+   "delta": -0.2711,
+   "credit_mid": 1.525,
+   "max_loss": 3.475
+  },
+  {
+   "symbol": "AMZN",
+   "outcome": "rejected",
+   "why": "no tradable strike on the protective side"
+  },
+  {
+   "symbol": "INTC",
+   "outcome": "rejected",
+   "why": "0 of 41 strikes passed quote quality (spread cap 8%) and inversion"
+  },
+  {
+   "symbol": "TSLA",
+   "outcome": "selected",
+   "contracts": 4,
+   "expiry": "2026-09-02",
+   "delta": -0.2309,
+   "credit_mid": 0.96,
+   "max_loss": 4.04
+  },
+  {
+   "symbol": "MU",
+   "outcome": "rejected",
+   "why": "nearest delta 0.49 vs target 0.25; only 33/100 strikes passed quality, spanning delta 0.49-0.86"
+  },
+  {
+   "symbol": "SPY",
+   "outcome": "selected",
+   "contracts": 4,
+   "expiry": "2026-09-02",
+   "delta": -0.2567,
+   "credit_mid": 0.89,
+   "max_loss": 4.11
+  },
+  {
+   "symbol": "GOOGL",
+   "outcome": "rejected",
+   "why": "nearest delta 0.93 vs target 0.25; only 7/41 strikes passed quality, spanning delta 0.93-0.98"
+  }
+ ]
+}

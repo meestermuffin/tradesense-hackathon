@@ -10,6 +10,7 @@ where it exists because a scheduler retry after a timeout would otherwise double
 
 import argparse
 import datetime
+import json
 import os
 import sys
 
@@ -68,6 +69,11 @@ def main():
     ap.add_argument("--series", default=None)
     ap.add_argument("--top", type=int, default=MAX_OPEN_POSITIONS)
     ap.add_argument("--deadline", default=None, help="refuse expiries past this date")
+    ap.add_argument(
+        "--no-artifact",
+        action="store_true",
+        help="skip the per-run selection record",
+    )
     ap.add_argument(
         "--expect-account",
         default=None,
@@ -142,12 +148,14 @@ def main():
         existing_risk = 0.0
         deadline = datetime.date.fromisoformat(a.deadline) if a.deadline else None
         placed = 0
+        decisions = []
         print()
         for r in [x for x in ranked if x["eligible"]][: a.top]:
             sym = r["symbol"]
             cand = select_vertical(c, sym, spots[sym], TEMPLATE)
             if cand.get("rejected"):
                 print(f"  {sym:5} no structure: {cand['rejected']}")
+                decisions.append(dict(symbol=sym, outcome="rejected", why=cand["rejected"]))
                 continue
             n, reasons = check_entry(
                 cand,
@@ -165,9 +173,21 @@ def main():
             )
             if reasons:
                 print(head + "  REFUSED: " + "; ".join(reasons))
+                decisions.append(dict(symbol=sym, outcome="refused", why=reasons))
                 continue
             print(
                 head + f" -> {n}x risk ${defined_risk(cand['width'], cand['credit_mid'], n):,.0f}"
+            )
+            decisions.append(
+                dict(
+                    symbol=sym,
+                    outcome="selected",
+                    contracts=n,
+                    expiry=cand["expiry"],
+                    delta=cand["short_delta"],
+                    credit_mid=cand["credit_mid"],
+                    max_loss=cand["max_loss"],
+                )
             )
             existing_risk += defined_risk(cand["width"], cand["credit_mid"], n)
             held.add(sym)
@@ -183,6 +203,28 @@ def main():
                 else:
                     placed += 1
         print(f"\n{'placed' if a.live else 'would place'} {placed if a.live else len(held)} pos")
+        if not a.no_artifact:
+            os.makedirs(os.path.join(ROOT, "data", "selection"), exist_ok=True)
+            out = os.path.join(
+                ROOT,
+                "data",
+                "selection",
+                f"selection_{datetime.date.today().isoformat()}.json",
+            )
+            json.dump(
+                dict(
+                    run_at=datetime.datetime.now(datetime.UTC).isoformat(),
+                    account=acct["account_number"],
+                    market_open=clock.get("is_open"),
+                    live=a.live,
+                    template=TEMPLATE,
+                    decisions=decisions,
+                ),
+                open(out, "w"),
+                indent=1,
+                default=str,
+            )
+            print(f"selection record -> {os.path.relpath(out, ROOT)}")
         return 0
     finally:
         if os.path.exists(LOCK):
