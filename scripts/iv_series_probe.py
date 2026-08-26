@@ -262,12 +262,53 @@ def stage2(names, mode):
         print(f"  attribution S/M = {S_/M if M else float('nan'):.2f}")
         print(f"  GATE: {'FAIL' if 'FAIL' in (v1,v2,v3) else ('CONDITIONAL' if 'CONDITIONAL' in (v1,v2,v3) else 'PASS')}\n")
 
+def diag(names, mode):
+    """Does the choice of print change the PERCENTILE? Registered reading, before running:
+    median |p_c - p_vw| <= 5 -> print choice immaterial, S/M invalid as an eligibility gate.
+    >= 15 -> it matters. Between -> ambiguous, conservative reading wins."""
+    print(f"DIAGNOSTIC ({mode}) — percentile from last-trade vs volume-weighted print\n")
+    print(f"{'name':6} {'days':>5} {'med|pc-pvw|':>12} {'p90':>7} {'max':>7}   reading")
+    print("-"*62)
+    for sym in names:
+        closes = stock_closes(sym)
+        cands = candidates(sym, closes)
+        idx = {(t, b["t"][:10]): b for t, bl in
+               option_bars(all_symbols(cands, mode), START, END).items() for b in bl}
+        sc, sw = [], []
+        for c in cands:
+            got = pick(c, idx, mode)
+            if not got: continue
+            K, cb, pb = got
+            a_, w_ = [], []
+            for b, cp in ((cb, "C"), (pb, "P")):
+                if not b: continue
+                x = implied_vol(b["c"], c["S"], K, c["T"], RATE, cp)
+                y = implied_vol(b["vw"], c["S"], K, c["T"], RATE, cp)
+                if x: a_.append(x)
+                if y: w_.append(y)
+            if a_ and w_:
+                sc.append((c["day"], sum(a_)/len(a_))); sw.append((c["day"], sum(w_)/len(w_)))
+        def pcts(series):
+            out={}
+            for i,(d,v) in enumerate(series):
+                win=[x for _,x in series[max(0,i-PCT_WINDOW):i]]
+                if len(win)>=PCT_MIN_OBS: out[d]=pct_rank(win,v)
+            return out
+        pc, pw = pcts(sc), pcts(sw)
+        both=[d for d in pc if d in pw]
+        if not both:
+            print(f"{sym:6} {'-':>5}  no overlapping days"); continue
+        d=sorted(abs(pc[x]-pw[x]) for x in both)
+        med=st.median(d); p90=d[int(.9*len(d))-1]; mx=d[-1]
+        rd = "immaterial" if med<=5 else ("MATTERS" if med>=15 else "ambiguous")
+        print(f"{sym:6} {len(both):>5} {med:>12.2f} {p90:>7.2f} {mx:>7.2f}   {rd}")
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--stage", type=int, required=True, choices=(1, 2))
+    ap.add_argument("--stage", type=int, required=True, choices=(1, 2, 3))
     ap.add_argument("--select", choices=("strict", "traded"), default="strict",
                     help="strict = v1 (nearest strike only); traded = v2 (nearest strike with a passing bar)")
     ap.add_argument("--names", default=",".join(NAMES))
     a = ap.parse_args()
     names = [x.strip().upper() for x in a.names.split(",") if x.strip()]
-    (stage1 if a.stage == 1 else stage2)(names, a.select)
+    {1: stage1, 2: stage2, 3: diag}[a.stage](names, a.select)
