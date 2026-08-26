@@ -14,7 +14,7 @@ END      ?= $(shell $(PY) -c "import datetime;print(datetime.date.today()-dateti
 
 .DEFAULT_GOAL := help
 .PHONY: help status heartbeat capture cycle cycle-live snapshot \
-        series ic job2 probe roll risk verify server server-build schedule cleanup logs check lint fmt
+        series ic job2 probe roll risk verify server server-build schedule cleanup logs check lint fmt test
 
 ## ---- everyday ----
 
@@ -152,6 +152,9 @@ logs:  ## tail the scheduled-job logs
 #   unschedule     deleted the launchd agents and their plists
 #   clean-lock     deleted the interlock that stops two cycles trading the same signal twice
 # Each is still doable by hand when it is genuinely wanted; see docs or run the command directly.
+
+test:  ## run the test suite — no network, no credentials, runs on a fresh clone
+	@uv run pytest
 
 lint:  ## report lint issues without changing anything
 	@uv run ruff check . && uv run ruff format --check . && echo "  clean"

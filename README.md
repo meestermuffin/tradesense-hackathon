@@ -74,6 +74,7 @@ src/            data boundary, BS inverter, signal, selection, execution, risk
                 pydantic models at the edges, no database driver — runs anywhere
 src/models.py   every shape that crosses a boundary, in one file
 scripts/        measurement runners and the operational jobs
+tests/          fakes only — the suite runs on a fresh clone with no keys
 docs/           measurement log, cost model
 docs/pending/   registrations for measurements that have not run
 data/           IV series, earnings dates; captures namespaced by account
@@ -87,7 +88,8 @@ ui/             the dashboard — Next.js, credentials server-side only
 [uv](https://docs.astral.sh/uv/) manages the Python side. From a fresh clone:
 
 ```bash
-uv sync                 # creates .venv from uv.lock — pydantic, plus ruff for development
+uv sync                 # creates .venv from uv.lock — pydantic, plus ruff and pytest for development
+make test               # 117 tests, no network and no credentials needed
 make verify             # confirms your Alpaca account has the entitlements the project needs
 make cycle              # dry run: rank, select, size. Places nothing.
 ```
@@ -97,6 +99,24 @@ directly, prefix it: `uv run python scripts/heartbeat.py`.
 
 Credentials come from a gitignored `.env` at the repo root (`ALPACA_KEY_ID`, `ALPACA_SECRET_KEY`),
 which is also where the scheduled jobs read them — `launchd` gives a job almost no environment.
+
+## Tests
+
+`make test`. Everything runs against fakes, because a test needing a live account can only be run
+by the one person holding the keys, which in practice means it is not run.
+
+They are weighted toward the things that fail quietly rather than loudly:
+
+- **The ranking cannot see its own outcome.** The scored day is excluded from the window it is
+  ranked against, proven by computing that window independently and requiring exact agreement.
+  This project has already published an IC of 0.16 where the outcome and both signals were
+  functions of the same term.
+- **The sign conventions on `limit_price`.** Net price, negative for a credit. Inverting it does
+  not raise — it places a real order at the wrong price.
+- **Newey-West against a naive t on overlapping windows**, pinned at the measured values: naive
+  1.671, corrected 0.815 at lag 21.
+- **The permutation test is calibrated**, checked across 40 independent nulls rather than one.
+  A single null draw here reads p 0.02, which is exactly why one draw proves nothing.
 
 ## Dependencies
 

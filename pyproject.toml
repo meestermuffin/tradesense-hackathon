@@ -21,6 +21,11 @@ package = false
 #
 # No database driver, still. That rule is unchanged and is about what teammates can run.
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]
+addopts = "-q"
+
 [tool.ruff]
 line-length = 100
 target-version = "py313"
@@ -56,5 +61,6 @@ docstring-code-format = true
 
 [dependency-groups]
 dev = [
+    "pytest>=9.1.1",
     "ruff>=0.6",
 ]
