@@ -83,9 +83,53 @@ This is the half with no evidence behind it, and it is the half the backtest is 
 SPY short leg went 3¢ → 8¢ in 61 seconds; AMD's went 0.20 → 0.66. Any point estimate from this is
 decoration.
 
-**How it gets fitted:** capture NBBO on all eleven universe names at every decision point through the
-live week, then regress spread-as-percentage-of-mid on observables available historically — option
-price, moneyness, DTE, and underlying dollar volume. Only then does a leg-2 number become quotable.
+### Attempted 2026-08-26, and it does not work from historical data
+
+**132 NBBO quotes captured across all eleven universe names**, two tenors (9 and 30 DTE), six
+near-ATM strikes each, at 15:50 ET. Evidence in
+`.claude/private/artifacts/2026-08-26-nbbo-capture/nbbo_universe.json`.
+
+Median spread as a share of mid, by name:
+
+| SPY | TSLA | NVDA | AAPL | MSFT | AMZN | AMD | META | INTC | GOOGL | MU |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0.96% | 1.52% | 1.63% | 3.01% | 3.21% | 3.42% | 3.62% | 4.75% | 5.14% | 5.21% | 5.61% |
+
+**A 6× range across the universe** — and GOOGL is wider than TSLA despite higher equity dollar
+volume, which is the "equity volume is blind to spread width" caveat appearing in data.
+
+**Attempt 1 — regress on price, tenor, moneyness.** In-sample R² 0.62 in log space. But
+**leave-one-name-out error is 1.72× typical**, ranging 0.43× (INTC) to 3.68× (SPY). The observables
+do not generalise across names; **name identity dominates**.
+
+**Attempt 2 — proxy the spread from historical option bars**, which is what a backtest would actually
+have. Prior-session bar statistics against the captured spread:
+
+| proxy | vs absolute spread | vs spread % |
+|---|---|---|
+| bar close (price level) | +0.655 | +0.143 |
+| (high − low), absolute | +0.536 | — |
+| 1 / √(trade count `n`) | +0.464 | +0.374 |
+| (high − low) / close | −0.227 | −0.068 |
+| **cross-name, (h−l)/close vs spread%** | — | **+0.036** |
+
+**No bar-derived proxy tracks the cross-name variation.** The one predictor that works at all — price
+level — recovers the tick grid, which was never the hard part. The +0.036 cross-name correlation is
+the number that closes this route.
+
+### Consequence: a defensible leg-2 P&L number may not be reachable
+
+The only remaining path is to capture NBBO forward through the live week, build per-name spread
+distributions, and **assume 2026 per-name spread levels apply to 2024–25**. That assumption is
+**untestable with available data** — there are no historical quotes to check it against, which is the
+same absence that created the problem.
+
+**So the honest position is to not quote a backtested P&L at all.** The evidence this project has is
+the **rank-IC result**, which requires no cost model: it is measured on implied versus subsequent
+realized volatility and charges nothing. Live P&L over the judged sessions is the other number, and
+it is real by construction. A backtested return sitting between them, resting on an unfalsifiable
+spread assumption, is the one figure a judge could take apart — and the plan has said so since the
+24th.
 
 **Known bias to carry:** any estimator fitted on *executed prints* rather than quotes understates the
 cost of demanding liquidity, because prints are what traded, not what was offered.
