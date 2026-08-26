@@ -1,6 +1,6 @@
 # Results — IV-series probe v2
 
-Registration `9a16899`, committed before this ran. `--select strict` was re-run first and
+Registration `bb633d6`, committed before this ran. `--select strict` was re-run first and
 **reproduced v1 exactly** (SPY 248/250, 0.8%, R 0.17, ac 0.885; AMD 157/250, 37.2%, R 0.19,
 ac 0.867) — the selection rewrite did not disturb v1's numbers.
 

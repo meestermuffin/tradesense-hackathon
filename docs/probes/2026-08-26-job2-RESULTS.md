@@ -1,6 +1,6 @@
 # Results — job 2: is the ranking a scheduled-event detector?
 
-Registrations `1ea57dc` + addenda `237bb2c`, `2eca3b5`, and the powered test's own, all ancestors of
+Registrations `010fee8` + addenda `beeb80a`, `8eadb70`, and the powered test's own, all ancestors of
 this commit. Earnings dates: `data/earnings_8k_2024_2025.json`, **SEC 8-K Item 2.02 filing dates**,
 67 announcements across ten single-name underlyings. SPY returns zero — correct, it is an ETF.
 

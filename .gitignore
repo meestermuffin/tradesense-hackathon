@@ -19,3 +19,7 @@ __pycache__/
 # accruing evidence, and the NBBO captures cannot be reconstructed.
 logs/
 .cycle.lock
+
+# Ruff writes a self-ignoring .gitignore inside its own cache, so this is belt-and-braces --
+# but it means the repo does not depend on a tool continuing to clean up after itself.
+.ruff_cache/

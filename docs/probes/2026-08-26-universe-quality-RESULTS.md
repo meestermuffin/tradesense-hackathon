@@ -1,7 +1,7 @@
 # Results — universe IV-series quality, and the universe decision
 
 Characterization across the full candidate universe, plus the estimator diagnostic registered at
-`fc964db` before it ran. **Neither run can change v1's or v2's gate verdicts.**
+`ca30287` before it ran. **Neither run can change v1's or v2's gate verdicts.**
 
 ## Series quality, 13 candidates
 
@@ -39,7 +39,7 @@ matched). Part of what it measures is intraday drift, not measurement error.
 
 ## The diagnostic that settled it — reading registered before the run
 
-Registered at `fc964db`: median `|p_c − p_vw|` ≤ 5 points → print choice immaterial, `S/M` invalid as
+Registered at `ca30287`: median `|p_c − p_vw|` ≤ 5 points → print choice immaterial, `S/M` invalid as
 an eligibility gate. ≥ 15 → it matters. Between → ambiguous, conservative reading wins.
 
 | name | days | med \|p_c − p_vw\| | p90 | max | reading |

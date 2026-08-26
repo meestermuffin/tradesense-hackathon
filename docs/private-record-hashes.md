@@ -16,7 +16,7 @@ privately, it can be checked against these.
 shasum -a 256 PLAN.md
 ```
 
-| date (ET) | PLAN.md SHA-256 | private-record commit | what had just been decided |
+| date (ET) | PLAN.md SHA-256 | private-record commit *(separate repo)* | what had just been decided |
 |---|---|---|---|
 | 2026-08-26 15:57 | `220316a09015850ab6786b98b7ac27ca2a06cfd1d78bbdb76e20b6ce40038282` | `e7a68b3aff8a` | universe decided (11 names), gate verdicts recorded, cost model written, IC and job-2 results in |
 

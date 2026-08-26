@@ -1,6 +1,6 @@
 # Results — IV-series probe
 
-**Registration:** `2026-08-26-iv-series-probe.md`, committed as `e93267d` **before any data was
+**Registration:** `2026-08-26-iv-series-probe.md`, committed as `7fe2797` **before any data was
 seen**. Script `scripts/iv_series_probe.py`, same commit. Stage 1 output: `2026-08-26-stage1.json`.
 
 ## Stage 1 — chain characterization (issued no verdict, by construction)

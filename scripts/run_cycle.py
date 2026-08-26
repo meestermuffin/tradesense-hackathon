@@ -12,6 +12,7 @@ import argparse
 import datetime
 import json
 import os
+import platform
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -192,7 +193,12 @@ def main():
             existing_risk += defined_risk(cand["width"], cand["credit_mid"], n)
             held.add(sym)
             if a.live:
-                rec = execution.place(c, cand, n, log_dir=LOGDIR)
+                rec = execution.place(
+                    c,
+                    cand,
+                    n,
+                    log_dir=os.path.join(LOGDIR, acct["account_number"]),
+                )
                 print(
                     f"        {rec.get('status')} fill={rec.get('fill')} "
                     f"vs_mid={rec.get('vs_mid')} vs_touch={rec.get('vs_touch')}"
@@ -204,17 +210,14 @@ def main():
                     placed += 1
         print(f"\n{'placed' if a.live else 'would place'} {placed if a.live else len(held)} pos")
         if not a.no_artifact:
-            os.makedirs(os.path.join(ROOT, "data", "selection"), exist_ok=True)
-            out = os.path.join(
-                ROOT,
-                "data",
-                "selection",
-                f"selection_{datetime.date.today().isoformat()}.json",
-            )
+            sel = os.path.join(ROOT, "data", "selection", acct["account_number"])
+            os.makedirs(sel, exist_ok=True)
+            out = os.path.join(sel, f"selection_{datetime.date.today().isoformat()}.json")
             json.dump(
                 dict(
                     run_at=datetime.datetime.now(datetime.UTC).isoformat(),
                     account=acct["account_number"],
+                    host=platform.node(),
                     market_open=clock.get("is_open"),
                     live=a.live,
                     template=TEMPLATE,

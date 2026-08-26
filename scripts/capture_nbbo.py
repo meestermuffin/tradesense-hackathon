@@ -12,6 +12,7 @@ import argparse
 import csv
 import datetime
 import os
+import platform
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -20,6 +21,11 @@ from src.universe import UNIVERSE
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUTDIR = os.path.join(ROOT, "data", "nbbo")
+
+# Outputs are namespaced by account number. Two people running this against different accounts
+# must not write the same path -- otherwise a second clone silently doubles the observations the
+# spread model is fitted on, and per-cell counts (the thing that model is most fragile about)
+# become wrong in a way nobody would notice.
 # Strike selection is driven by moneyness, not by a count of nearest-ATM strikes.
 #
 # The first capture took the 6 nearest strikes, which put every contract at |delta| 0.36-0.56 --
@@ -54,6 +60,7 @@ def main():
     a = ap.parse_args()
 
     c = AlpacaClient()
+    account = c.account()["account_number"]
     clock = c.clock()
     is_open = bool(clock.get("is_open"))
     if not is_open and not a.force:
@@ -110,6 +117,8 @@ def main():
         rows.append(
             dict(
                 captured_at=captured_at,
+                account=account,
+                host=platform.node(),
                 rth=is_open,
                 symbol=sym,
                 **m,
@@ -128,8 +137,9 @@ def main():
         print("no usable two-sided quotes returned", file=sys.stderr)
         return 1
 
-    os.makedirs(OUTDIR, exist_ok=True)
-    path = os.path.join(OUTDIR, f"nbbo_{today.isoformat()}.csv")
+    outdir = os.path.join(OUTDIR, account)
+    os.makedirs(outdir, exist_ok=True)
+    path = os.path.join(outdir, f"nbbo_{today.isoformat()}.csv")
     new = not os.path.exists(path)
     with open(path, "a", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))

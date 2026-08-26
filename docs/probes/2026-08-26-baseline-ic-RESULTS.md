@@ -1,6 +1,6 @@
 # Results — baseline signal IC
 
-Registration `1ea57dc`; addendum voiding the original statistic `237bb2c`. Both are ancestors of this
+Registration `010fee8`; addendum voiding the original statistic `beeb80a`. Both are ancestors of this
 commit. Series: `data/iv_series_2024-03_2025-02.csv.gz`, 11 names, 1807 name-days, 165 usable
 sessions.
 
