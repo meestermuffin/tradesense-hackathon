@@ -3,7 +3,10 @@
 Carried from a strategy that was measured, falsified and shelved. Each rule here cost a wrong
 headline number to learn.
 """
-import math, random
+
+import math
+import random
+
 
 def rank(xs):
     """Average ranks, ties shared."""
@@ -20,6 +23,7 @@ def rank(xs):
         i = j + 1
     return r
 
+
 def spearman(a, b):
     """Rank correlation. Selection acts on ordering, so this is the statistic that matches the
     deployed objective — linear correlation does not."""
@@ -32,6 +36,7 @@ def spearman(a, b):
     da = math.sqrt(sum((x - ma) ** 2 for x in ra))
     db = math.sqrt(sum((x - mb) ** 2 for x in rb))
     return num / (da * db) if da and db else None
+
 
 def newey_west_t(xs, lag):
     """t-statistic robust to serial correlation.
@@ -51,6 +56,7 @@ def newey_west_t(xs, lag):
     if s <= 0:
         return None
     return mu / math.sqrt(s / n)
+
 
 def permutation_p(daily, stat_fn, draws=1000, seed=42):
     """Empirical p-value by shuffling the signal WITHIN each day.

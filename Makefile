@@ -14,7 +14,7 @@ END      ?= $(shell $(PY) -c "import datetime;print(datetime.date.today()-dateti
 
 .DEFAULT_GOAL := help
 .PHONY: help status heartbeat capture cycle cycle-live snapshot \
-        series ic job2 probe schedule cleanup logs check
+        series ic job2 probe roll schedule cleanup logs check lint fmt
 
 ## ---- everyday ----
 
@@ -137,6 +137,17 @@ logs:  ## tail the scheduled-job logs
 #   unschedule     deleted the launchd agents and their plists
 #   clean-lock     deleted the interlock that stops two cycles trading the same signal twice
 # Each is still doable by hand when it is genuinely wanted; see docs or run the command directly.
+
+lint:  ## report lint issues without changing anything
+	@ruff check . && ruff format --check . && echo "  clean"
+
+fmt:  ## fix what can be fixed automatically, then format
+	@ruff check . --fix
+	@ruff format .
+	@echo "  run 'make check' to confirm nothing broke"
+
+roll:  ## estimate effective spread from trade sequences, validate against the latest capture
+	@$(PY) scripts/roll_spread.py
 
 check:  ## import every module and assert no database driver leaked in
 	@$(PY) -c "import sys;sys.path.insert(0,'.');import importlib;\

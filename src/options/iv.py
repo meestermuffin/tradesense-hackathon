@@ -3,10 +3,13 @@
 Imports nothing but the standard library, and in particular no database driver — this module
 must run for anyone who clones the repo, on a machine with none of the pipeline containers.
 """
+
 import math
+
 
 def _N(x):
     return 0.5 * (1 + math.erf(x / math.sqrt(2)))
+
 
 def price(S, K, T, r, sigma, cp):
     """European option price. cp is 'C' or 'P'."""
@@ -17,6 +20,7 @@ def price(S, K, T, r, sigma, cp):
     if cp == "C":
         return S * _N(d1) - K * math.exp(-r * T) * _N(d2)
     return K * math.exp(-r * T) * _N(-d2) - S * _N(-d1)
+
 
 def implied_vol(observed, S, K, T, r, cp, lo=1e-4, hi=5.0, iters=80):
     """Invert by bisection. Returns None when the price implies no volatility.
@@ -39,6 +43,7 @@ def implied_vol(observed, S, K, T, r, cp, lo=1e-4, hi=5.0, iters=80):
         else:
             hi = mid
     return (lo + hi) / 2
+
 
 def realized_vol(closes, annualize=252):
     """Close-to-close realized volatility, annualized. `closes` in chronological order."""

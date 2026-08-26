@@ -8,7 +8,12 @@ Two things measured on 2026-08-26 shape this:
 - The NBBO at submission is **unreconstructable** — there is no historical options quote endpoint.
   Capture it in the same breath as the order or the fill is uninterpretable forever.
 """
-import datetime, json, os, time
+
+import datetime
+import json
+import os
+import time
+
 from ..data.alpaca import leg
 
 
@@ -26,8 +31,12 @@ def _net(quotes, short_sym, long_sym, closing):
     smid, lmid = (s["bp"] + s["ap"]) / 2, (l["bp"] + l["ap"]) / 2
     mid = smid - lmid
     touch = (s["ap"] - l["bp"]) if closing else (s["bp"] - l["ap"])
-    return dict(mid=round(mid, 4), touch=round(touch, 4),
-                short=dict(bid=s["bp"], ask=s["ap"]), long=dict(bid=l["bp"], ask=l["ap"]))
+    return dict(
+        mid=round(mid, 4),
+        touch=round(touch, 4),
+        short=dict(bid=s["bp"], ask=s["ap"]),
+        long=dict(bid=l["bp"], ask=l["ap"]),
+    )
 
 
 def place(client, candidate, contracts, closing=False, cross=0.0, poll_seconds=30, log_dir=None):
@@ -49,9 +58,9 @@ def place(client, candidate, contracts, closing=False, cross=0.0, poll_seconds=3
     else:
         price = -(net["touch"] - cross) if cross else -net["mid"]
 
-    submitted_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    submitted_at = datetime.datetime.now(datetime.UTC).isoformat()
     order = client.submit_mleg(build_legs(candidate, closing), contracts, price)
-    post = client.option_quotes_latest(syms)          # bounds quote drift across the submit window
+    post = client.option_quotes_latest(syms)  # bounds quote drift across the submit window
 
     oid = order.get("id")
     state = order
@@ -62,14 +71,27 @@ def place(client, candidate, contracts, closing=False, cross=0.0, poll_seconds=3
         state = client.get_order(oid)
 
     filled = state.get("status") == "filled"
-    rec = dict(ok=True, filled=filled, order_id=oid, status=state.get("status"),
-               underlying=candidate["underlying"], structure=candidate["structure"],
-               expiry=candidate["expiry"], contracts=contracts, closing=closing,
-               limit=price, submitted_at=submitted_at, filled_at=state.get("filled_at"),
-               fill=float(state["filled_avg_price"]) if state.get("filled_avg_price") else None,
-               nbbo_pre=net, nbbo_post=_net(post, short_sym, long_sym, closing),
-               legs=[{k: lg.get(k) for k in ("symbol", "side", "status", "filled_avg_price")}
-                     for lg in (state.get("legs") or [])])
+    rec = dict(
+        ok=True,
+        filled=filled,
+        order_id=oid,
+        status=state.get("status"),
+        underlying=candidate["underlying"],
+        structure=candidate["structure"],
+        expiry=candidate["expiry"],
+        contracts=contracts,
+        closing=closing,
+        limit=price,
+        submitted_at=submitted_at,
+        filled_at=state.get("filled_at"),
+        fill=float(state["filled_avg_price"]) if state.get("filled_avg_price") else None,
+        nbbo_pre=net,
+        nbbo_post=_net(post, short_sym, long_sym, closing),
+        legs=[
+            {k: lg.get(k) for k in ("symbol", "side", "status", "filled_avg_price")}
+            for lg in (state.get("legs") or [])
+        ],
+    )
     if rec["fill"] is not None:
         rec["vs_mid"] = round((abs(rec["fill"]) - net["mid"]) * (1 if not closing else -1), 4)
         rec["vs_touch"] = round((abs(rec["fill"]) - net["touch"]) * (1 if not closing else -1), 4)

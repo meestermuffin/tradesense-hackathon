@@ -16,7 +16,13 @@ Facts encoded here that cost time to learn, so they are not re-learned:
   available for the current day. Consequence: a live signal takes its trailing history from bars
   (through yesterday) and today's observation from `quotes/latest`, which is real-time.
 """
-import json, os, time, urllib.error, urllib.parse, urllib.request
+
+import json
+import os
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 
 DATA_HOST = "https://data.alpaca.markets"
 PAPER_HOST = "https://paper-api.alpaca.markets"
@@ -61,8 +67,11 @@ class AlpacaClient:
 
     # ---- transport ----
     def _headers(self):
-        return {"APCA-API-KEY-ID": self.key, "APCA-API-SECRET-KEY": self.secret,
-                "Content-Type": "application/json"}
+        return {
+            "APCA-API-KEY-ID": self.key,
+            "APCA-API-SECRET-KEY": self.secret,
+            "Content-Type": "application/json",
+        }
 
     def request(self, method, host, path, params=None, body=None, timeout=45, retries=4):
         url = host + path
@@ -80,10 +89,10 @@ class AlpacaClient:
                 # 429 and 5xx are worth retrying; 4xx are not — they mean the request is wrong.
                 if e.code == 429 or 500 <= e.code < 600:
                     if attempt == retries - 1:
-                        raise AlpacaError(e.code, body_txt, url)
+                        raise AlpacaError(e.code, body_txt, url) from e
                     time.sleep(1.5 * (attempt + 1))
                     continue
-                raise AlpacaError(e.code, body_txt, url)
+                raise AlpacaError(e.code, body_txt, url) from e
             except urllib.error.URLError:
                 if attempt == retries - 1:
                     raise
@@ -114,31 +123,59 @@ class AlpacaClient:
 
     # ---- market data ----
     def stock_closes_latest(self, symbols):
-        d = self.request("GET", DATA_HOST, "/v2/stocks/bars/latest",
-                         {"symbols": ",".join(symbols), "feed": "iex"})
+        d = self.request(
+            "GET",
+            DATA_HOST,
+            "/v2/stocks/bars/latest",
+            {"symbols": ",".join(symbols), "feed": "iex"},
+        )
         return {s: b["c"] for s, b in (d.get("bars") or {}).items()}
 
-    def option_contracts(self, underlying, expiration_date=None, exp_gte=None, exp_lte=None,
-                         type_=None, strike_gte=None, strike_lte=None,
-                         status="active", limit=10000):
+    def option_contracts(
+        self,
+        underlying,
+        expiration_date=None,
+        exp_gte=None,
+        exp_lte=None,
+        type_=None,
+        strike_gte=None,
+        strike_lte=None,
+        status="active",
+        limit=10000,
+    ):
         """Contract metadata — TRADING host. `status='inactive'` is what reaches past expiries.
 
         **Pass an expiry bound.** With no `expiration_date`/`exp_lte`, the endpoint silently
         defaults `expiration_date_lte` to next weekend, so "list all expiries" quietly returns only
         the next few days and every downstream DTE filter comes back empty with no error.
         """
-        return self._paged(self.trade_host, "/v2/options/contracts", "option_contracts", {
-            "underlying_symbols": underlying, "expiration_date": expiration_date,
-            "expiration_date_gte": exp_gte, "expiration_date_lte": exp_lte,
-            "type": type_, "strike_price_gte": strike_gte, "strike_price_lte": strike_lte,
-            "status": status, "limit": limit})
+        return self._paged(
+            self.trade_host,
+            "/v2/options/contracts",
+            "option_contracts",
+            {
+                "underlying_symbols": underlying,
+                "expiration_date": expiration_date,
+                "expiration_date_gte": exp_gte,
+                "expiration_date_lte": exp_lte,
+                "type": type_,
+                "strike_price_gte": strike_gte,
+                "strike_price_lte": strike_lte,
+                "status": status,
+                "limit": limit,
+            },
+        )
 
     def option_quotes_latest(self, symbols):
         """Latest NBBO. There is no historical equivalent — capture at the time or lose it."""
         out = {}
         for i in range(0, len(symbols), QUOTE_BATCH):
-            d = self.request("GET", DATA_HOST, "/v1beta1/options/quotes/latest",
-                             {"symbols": ",".join(symbols[i:i + QUOTE_BATCH])})
+            d = self.request(
+                "GET",
+                DATA_HOST,
+                "/v1beta1/options/quotes/latest",
+                {"symbols": ",".join(symbols[i : i + QUOTE_BATCH])},
+            )
             out.update(d.get("quotes") or {})
         return out
 
@@ -146,18 +183,29 @@ class AlpacaClient:
     def history_end_cap():
         """Latest `end` that historical options endpoints will serve: yesterday, not today."""
         import datetime as _dt
+
         return (_dt.date.today() - _dt.timedelta(days=1)).isoformat()
 
     def option_bars(self, symbols, start, end, timeframe="1Day"):
-        end = min(end, self.history_end_cap())   # a window including today 403s
+        end = min(end, self.history_end_cap())  # a window including today 403s
         out = {}
         for i in range(0, len(symbols), 100):
-            batch = symbols[i:i + 100]
+            batch = symbols[i : i + 100]
             tok = None
             while True:
-                d = self.request("GET", DATA_HOST, "/v1beta1/options/bars",
-                                 {"symbols": ",".join(batch), "timeframe": timeframe,
-                                  "start": start, "end": end, "limit": 10000, "page_token": tok})
+                d = self.request(
+                    "GET",
+                    DATA_HOST,
+                    "/v1beta1/options/bars",
+                    {
+                        "symbols": ",".join(batch),
+                        "timeframe": timeframe,
+                        "start": start,
+                        "end": end,
+                        "limit": 10000,
+                        "page_token": tok,
+                    },
+                )
                 for s, bars in (d.get("bars") or {}).items():
                     out.setdefault(s, []).extend(bars)
                 tok = d.get("next_page_token")
@@ -168,9 +216,19 @@ class AlpacaClient:
     # ---- orders ----
     def submit_mleg(self, legs, qty, limit_price, tif="day"):
         """Multi-leg order. limit_price is NET: positive = debit, negative = credit."""
-        return self.request("POST", self.trade_host, "/v2/orders", body={
-            "order_class": "mleg", "qty": str(qty), "type": "limit",
-            "limit_price": f"{limit_price:.2f}", "time_in_force": tif, "legs": legs})
+        return self.request(
+            "POST",
+            self.trade_host,
+            "/v2/orders",
+            body={
+                "order_class": "mleg",
+                "qty": str(qty),
+                "type": "limit",
+                "limit_price": f"{limit_price:.2f}",
+                "time_in_force": tif,
+                "legs": legs,
+            },
+        )
 
     def get_order(self, order_id):
         return self.request("GET", self.trade_host, f"/v2/orders/{order_id}")
@@ -183,8 +241,9 @@ class AlpacaClient:
             return e.status in (404, 422)
 
     def open_orders(self, limit=100):
-        return self.request("GET", self.trade_host, "/v2/orders",
-                            {"status": "open", "limit": limit})
+        return self.request(
+            "GET", self.trade_host, "/v2/orders", {"status": "open", "limit": limit}
+        )
 
 
 def leg(symbol, side, intent, ratio=1):
