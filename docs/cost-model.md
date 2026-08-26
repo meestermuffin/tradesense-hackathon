@@ -117,7 +117,78 @@ have. Prior-session bar statistics against the captured spread:
 level — recovers the tick grid, which was never the hard part. The +0.036 cross-name correlation is
 the number that closes this route.
 
-### Consequence: a defensible leg-2 P&L number may not be reachable
+### Partial recovery: Roll's estimator on historical trades — 2026-08-26
+
+Bar-derived proxies failed. **Trade-sequence estimators were never tried, and they work better.**
+
+Roll (1984): absent information-driven price moves, consecutive trade-price changes have
+autocovariance `-s²/4` purely from bid-ask bounce, so `s = 2√(-cov)`. It needs only trade prices,
+and **Alpaca does serve historical options trades**.
+
+Tested on the 132 contracts with measured NBBO, using the previous session's trades:
+
+| | cross-name rank correlation with measured spread |
+|---|---|
+| best bar-derived proxy | **+0.036** |
+| **Roll on trade sequence** | **+0.500** |
+
+| name | Roll est. | measured quoted | ratio |
+|---|---|---|---|
+| SPY | 0.72% | 1.38% | 0.52× |
+| NVDA | 0.71% | 1.63% | 0.44× |
+| TSLA | 1.31% | 1.66% | 0.79× |
+| AMD | 3.10% | 3.59% | 0.87× |
+| MSFT | 1.20% | 3.73% | 0.32× |
+| MU | 2.58% | 5.51% | 0.47× |
+
+**The systematic underestimate is not error — it is the estimator measuring a different quantity.**
+Roll estimates the **effective** spread, what trades actually cross at. The NBBO is the **quoted**
+spread. This project's own fill measurements found trades clearing better than the touch, so the two
+*should* differ by roughly this factor. For a cost model, the effective spread is the more relevant
+number.
+
+**Reproduced 2026-08-26 from a committed runner** (`scripts/roll_spread.py`, per-contract output
+in `data/roll/`): 77 of 132 estimable, 34 dropped for too few trades, 21 for non-negative
+autocovariance, rho **+0.500**. The original number came from an uncommitted heredoc and was
+returned UNRESOLVABLE by review; it now recomputes.
+
+**But rho +0.500 on n=11 has a one-sided permutation p of 0.0604** (200,000 draws, seed 42). That is
+not separable from noise at 0.05. **Treat Roll as a lead worth pursuing, not a settled result** —
+against the bar proxy's +0.036 it is clearly the better direction, and that is all it currently
+supports.
+
+**Coverage is anti-correlated with cost, which matters more than the rho.** Cross-tabbing drop reason
+against measured spread quartile:
+
+| quartile | spread % | estimable | too few trades | trending |
+|---|---|---:|---:|---:|
+| Q1 tightest | 0.20–1.85% | **75.8%** | 3 | 5 |
+| Q2 | 1.87–3.16% | 57.6% | 8 | 6 |
+| Q3 | 3.17–5.15% | **39.4%** | 11 | 9 |
+| Q4 widest | 5.20–10.57% | 60.6% | 12 | 1 |
+
+Median spread among estimable contracts **2.92%**, among dropped **3.81%**. The fall is not monotonic
+— Q3 is the worst — but the direction holds: **Roll goes silent more often where the book is wider,
+which is where cost matters most.** Any sweep charging Roll costs must register an imputation rule
+for unestimable contract-days before it runs, or cost is quietly absent on exactly the expensive
+names.
+
+**What this changes.** The spread estimator moves from *unfittable* to *estimable with stated error*.
+It does **not** make a backtested P&L quotable on its own: one session, 11 names, `rho` 0.500, and a
+Roll-to-quoted ratio calibrated on a single day. The path is Roll for the historical level plus
+accumulating NBBO captures to calibrate the ratio — and **anything load-bearing needs its own
+pre-registration before it runs.**
+
+### Consequence: a defensible leg-2 P&L number is now conceivable, and was not
+
+Before this, the only route required assuming 2026 per-name spread levels applied to 2024-25, which
+is untestable against the same missing quotes that created the problem. Roll gives a **per-day,
+per-contract historical estimate from data that exists**, which is testable against every forward
+NBBO capture from here.
+
+The position stated below still holds until that calibration exists.
+
+### Original consequence, pre-Roll
 
 The only remaining path is to capture NBBO forward through the live week, build per-name spread
 distributions, and **assume 2026 per-name spread levels apply to 2024–25**. That assumption is
