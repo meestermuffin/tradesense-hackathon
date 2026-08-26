@@ -11,8 +11,8 @@ START    ?= 2024-03-01
 END      ?= $(shell $(PY) -c "import datetime;print(datetime.date.today()-datetime.timedelta(days=1))")
 
 .DEFAULT_GOAL := help
-.PHONY: help status heartbeat capture capture-force cycle cycle-live snapshot \
-        series ic job2 probe schedule unschedule logs clean-lock check
+.PHONY: help status heartbeat capture cycle cycle-live snapshot \
+        series ic job2 probe schedule logs check
 
 ## ---- everyday ----
 
@@ -48,9 +48,6 @@ heartbeat:  ## did yesterday's capture, cycle and equity row happen?
 capture:  ## capture NBBO across the universe (refuses outside market hours)
 	@$(PY) scripts/capture_nbbo.py
 
-capture-force:  ## capture anyway, marked rth=false — pollutes the spread model, use knowingly
-	@$(PY) scripts/capture_nbbo.py --force
-
 cycle:  ## rank, select, size — DRY RUN, places nothing
 	@$(PY) scripts/run_cycle.py --deadline $(DEADLINE) $(if $(SERIES),--series $(SERIES),)
 
@@ -74,9 +71,16 @@ endif
 
 ## ---- data and measurement ----
 
-series:  ## rebuild the IV series (START..END; END defaults to yesterday, today 403s)
-	@echo "building $(START) .. $(END)  — historical options data excludes the current session"
-	@$(PY) scripts/build_iv_series.py --start $(START) --end $(END)
+series:  ## build the IV series (START..END; END defaults to yesterday, today 403s)
+	@f="data/iv_series_$$(echo $(START) | cut -c1-7)_$$(echo $(END) | cut -c1-7).csv.gz"; \
+	if [ -f "$$f" ]; then \
+	  echo "refusing: $$f already exists."; \
+	  echo "  Registered results were computed on these files and must stay reproducible."; \
+	  echo "  To build a different window, pass START= and END=."; \
+	  exit 1; \
+	fi; \
+	echo "building $(START) .. $(END)  — historical options data excludes the current session"; \
+	$(PY) scripts/build_iv_series.py --start $(START) --end $(END)
 
 ic:  ## baseline signal IC, per the registered protocol
 	@$(PY) scripts/baseline_ic.py
@@ -92,16 +96,16 @@ probe:  ## IV-series gate probe, stage 2, v2 selection
 schedule:  ## install the four launchd agents (capture, cycle, snapshot, heartbeat)
 	@bash scripts/install_schedule.sh
 
-unschedule:  ## remove them
-	@for n in capture cycle snapshot heartbeat; do \
-	  launchctl bootout gui/$$(id -u)/com.tradesense.$$n 2>/dev/null && echo "  removed $$n" || true; \
-	  rm -f $$HOME/Library/LaunchAgents/com.tradesense.$$n.plist; \
-	done; echo "done"
-
 logs:  ## tail the scheduled-job logs
 	@tail -n 25 logs/*.log 2>/dev/null || echo "no logs yet — nothing has run"
 
 ## ---- housekeeping ----
+#
+# Deliberately absent, because a one-word target makes them too easy to reach by accident:
+#   capture-force  wrote knowingly-stale quotes into an append-only dataset
+#   unschedule     deleted the launchd agents and their plists
+#   clean-lock     deleted the interlock that stops two cycles trading the same signal twice
+# Each is still doable by hand when it is genuinely wanted; see docs or run the command directly.
 
 check:  ## import every module and assert no database driver leaked in
 	@$(PY) -c "import sys;sys.path.insert(0,'.');import importlib;\
@@ -111,5 +115,3 @@ check:  ## import every module and assert no database driver leaked in
 	@! grep -rqE '^[[:space:]]*(import|from)[[:space:]]+(psycopg|sqlalchemy|asyncpg|sqlite3)' src/ \
 	  && echo "  no database driver in src/" || (echo "  DATABASE DRIVER FOUND"; exit 1)
 
-clean-lock:  ## clear a stale cycle lock left by a killed run
-	@rm -f .cycle.lock && echo "lock cleared"
