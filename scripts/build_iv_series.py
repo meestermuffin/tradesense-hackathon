@@ -6,15 +6,20 @@ filtering rules are described by two committed pre-registrations, and importing 
 means the shipped series is provably produced by it. Reimplementing would silently allow drift
 between what was registered and what was shipped.
 """
-import csv, gzip, os, sys
+import argparse, csv, datetime, gzip, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import iv_series_probe as P
 
 UNIVERSE = ["SPY", "TSLA", "NVDA", "MSFT", "AAPL", "META", "AMZN", "INTC", "GOOGL", "AMD", "MU"]
-OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                   "data", "iv_series_2024-03_2025-02.csv.gz")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-def main(mode="traded"):
+def main(mode="traded", start=None, end=None, out=None):
+    # Override the probe module's window rather than editing it: iv_series_probe.py is a
+    # registered measurement artifact and its constants are what two pre-registrations describe.
+    if start: P.START = datetime.date.fromisoformat(start)
+    if end:   P.END = datetime.date.fromisoformat(end)
+    OUT = out or os.path.join(
+        ROOT, "data", f"iv_series_{P.START.strftime('%Y-%m')}_{P.END.strftime('%Y-%m')}.csv.gz")
     rows = []
     for sym in UNIVERSE:
         closes = P.stock_closes(sym)
@@ -49,4 +54,8 @@ def main(mode="traded"):
     print(f"\nwrote {OUT}  ({len(rows)} rows, {os.path.getsize(OUT)/1024:.0f} KB)")
 
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--start"); ap.add_argument("--end"); ap.add_argument("--out")
+    ap.add_argument("--select", default="traded")
+    a = ap.parse_args()
+    main(a.select, a.start, a.end, a.out)

@@ -175,6 +175,26 @@ from the OCC symbol, plus a rate.
 needs inversion, leaving two different IV definitions and comparisons that measure method as well as
 outcome.
 
+### Historical options data excludes the current session
+
+✅ **2026-08-26.** A bars or trades request whose `end` is **today** returns
+**403 `{"message":"OPRA agreement is not signed"}`**. The same request ending at the **previous
+session** returns 200, with data right up to it.
+
+| `end=` | result |
+|---|---|
+| yesterday | ✅ 200, bars through yesterday |
+| **today** | ❌ **403 "OPRA agreement is not signed"** |
+
+**There is no multi-day lag** — that was a `limit=1` misreading during this probe (limit truncates
+from the *start* of the window, so the single returned bar is the oldest, not the newest). Equity
+bars carry no such restriction and serve the current day normally.
+
+**Consequence for a live signal:** take trailing history from `options/bars` through yesterday and
+today's observation from `options/quotes/latest`, which is real-time. That mixes a quote-mid IV into
+a history of last-trade IVs — a definitional seam worth measuring rather than assuming away, since
+the two disagree by a meaningful fraction of a daily move.
+
 ### Data floor and sparsity
 
 📄 Docs say option data exists *"since February 2024."*
