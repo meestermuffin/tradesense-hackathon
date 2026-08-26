@@ -20,7 +20,18 @@ from src.universe import UNIVERSE
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUTDIR = os.path.join(ROOT, "data", "nbbo")
-STRIKES_PER_TENOR = 6
+# Strike selection is driven by moneyness, not by a count of nearest-ATM strikes.
+#
+# The first capture took the 6 nearest strikes, which put every contract at |delta| 0.36-0.56 --
+# the entire 0.15-0.35 sweep grid fell outside it, so the capture could not answer the question it
+# was collected for. A moneyness grid gives comparable delta coverage across names regardless of
+# share price, which a fixed count does not: 6 strikes spans a very different delta range on a
+# $87 underlying than on a $937 one.
+#
+# Puts run out to 0.82x spot to reach ~0.05 delta at 30 DTE; the near tenor needs less distance for
+# the same delta but the extra strikes are cheap and their coverage is recorded either way.
+PUT_MONEYNESS = [1.00, 0.985, 0.97, 0.955, 0.94, 0.925, 0.91, 0.89, 0.87, 0.85, 0.82]
+CALL_MONEYNESS = [1.00, 1.02, 1.05]  # kept for put-call comparison at the money
 
 
 def next_expiries(today, near_dte=9, far_dte=30):
@@ -64,10 +75,16 @@ def main():
             except Exception as e:
                 print(f"  chain fetch failed {s} {expiry}: {e}", file=sys.stderr)
                 continue
-            near = sorted(cs, key=lambda x: abs(float(x["strike_price"]) - spot[s]))[
-                :STRIKES_PER_TENOR
-            ]
-            for k in near:
+            chosen = {}
+            for kind, grid in (("put", PUT_MONEYNESS), ("call", CALL_MONEYNESS)):
+                avail = [x for x in cs if x["type"] == kind]
+                if not avail:
+                    continue
+                for target in grid:
+                    want = spot[s] * target
+                    best = min(avail, key=lambda x: abs(float(x["strike_price"]) - want))
+                    chosen[best["symbol"]] = best
+            for k in chosen.values():
                 syms.append(k["symbol"])
                 meta[k["symbol"]] = dict(
                     underlying=s,
