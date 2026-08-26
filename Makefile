@@ -6,6 +6,8 @@
 PY       := python3
 ROOT     := $(shell pwd)
 DEADLINE ?= 2026-09-04
+LIVE     ?= 0
+ACCOUNT  ?=
 SERIES   ?=
 START    ?= 2024-03-01
 END      ?= $(shell $(PY) -c "import datetime;print(datetime.date.today()-datetime.timedelta(days=1))")
@@ -93,8 +95,8 @@ probe:  ## IV-series gate probe, stage 2, v2 selection
 
 ## ---- scheduler ----
 
-schedule:  ## install the four launchd agents (capture, cycle, snapshot, heartbeat)
-	@bash scripts/install_schedule.sh
+schedule:  ## install the four agents. Arm with: make schedule LIVE=1 ACCOUNT=PA...
+	@LIVE=$(LIVE) ACCOUNT=$(ACCOUNT) bash scripts/install_schedule.sh
 
 logs:  ## tail the scheduled-job logs
 	@tail -n 25 logs/*.log 2>/dev/null || echo "no logs yet — nothing has run"

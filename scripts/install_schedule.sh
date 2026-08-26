@@ -50,14 +50,26 @@ $args  </array>
 PLIST
   launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
   launchctl bootstrap "gui/$(id -u)" "$AGENTS/$label.plist"
-  echo "  installed $label at $(printf '%02d:%02d' "$hour" "$min") local, Mon-Fri"
+  echo "  installed $label at $(printf '%02d:%02d' "$((10#$hour))" "$((10#$min))") local, Mon-Fri"
 }
 
 # 15:50 — near the decision point, and inside RTH so the quotes mean something.
 emit capture  15 50 capture_nbbo.py
-# 16:05 — after the close, matching the existing pipeline's EOD trigger. Dry run until --live is
-# added here deliberately; a scheduler must not be able to trade by accident.
-emit cycle    16 05 run_cycle.py --deadline 2026-09-04
+# 16:05 — after the close, matching the existing pipeline's EOD trigger.
+#
+# Dry by default. LIVE=1 arms it; ACCOUNT= states which account it is meant to trade. The account
+# is baked into the plist as an assertion rather than left implicit in .env, so swapping
+# credentials without re-installing aborts loudly instead of trading the wrong book.
+CYCLE_ARGS="--deadline 2026-09-04"
+if [ "${LIVE:-0}" = "1" ]; then
+  if [ -z "${ACCOUNT:-}" ]; then
+    echo "!! LIVE=1 requires ACCOUNT=<account_number> — refusing to arm without naming the target."
+    exit 1
+  fi
+  CYCLE_ARGS="$CYCLE_ARGS --live --expect-account $ACCOUNT"
+  echo "  ARMING LIVE against account $ACCOUNT"
+fi
+emit cycle    16 05 run_cycle.py $CYCLE_ARGS
 # 16:45 — independent of the cycle, so a failed cycle still leaves a P&L row.
 emit snapshot 16 45 snapshot_equity.py
 # 09:00 - goes looking for the silence. A laptop asleep at 15:50 produces no capture, no
@@ -68,5 +80,10 @@ echo
 echo "Installed. Verify with:  launchctl list | grep tradesense"
 echo "Logs:                    $ROOT/logs/"
 echo
-echo "NOTE: the cycle runs in DRY RUN. To trade, add --live to com.tradesense.cycle.plist"
-echo "      and reload it. That is deliberately a manual edit."
+if [ "${LIVE:-0}" = "1" ]; then
+  echo "CYCLE IS ARMED against $ACCOUNT. It will place real orders at 16:05 on weekdays."
+else
+  echo "NOTE: the cycle runs in DRY RUN."
+  echo "      To arm:  make schedule LIVE=1 ACCOUNT=PA382RL5C7X8   (rehearsal, test account)"
+  echo "               make schedule LIVE=1 ACCOUNT=PA3BUA9MX72C   (judged window)"
+fi

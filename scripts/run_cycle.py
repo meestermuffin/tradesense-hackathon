@@ -55,6 +55,8 @@ def main():
     ap.add_argument("--series", default=None)
     ap.add_argument("--top", type=int, default=MAX_OPEN_POSITIONS)
     ap.add_argument("--deadline", default=None, help="refuse expiries past this date")
+    ap.add_argument("--expect-account", default=None,
+                    help="abort unless the credentials resolve to this account number")
     a = ap.parse_args()
 
     if not acquire_lock():
@@ -73,6 +75,12 @@ def main():
         state = portfolio_state(acct, positions)
         print(f"account     {acct['account_number']}  equity ${state['equity']:,.2f}  "
               f"open legs {len(positions)}  market_open={clock.get('is_open')}")
+        if a.expect_account and acct["account_number"] != a.expect_account:
+            # The credentials in .env do not announce which account they belong to. Trading a
+            # rehearsal into the judged book, or the reverse, is silent and unrecoverable.
+            print(f"ABORT: expected account {a.expect_account}, credentials resolve to "
+                  f"{acct['account_number']}. Refusing to trade the wrong book.")
+            return 3
         print(f"mode        {'LIVE — orders will be placed' if a.live else 'DRY RUN — no orders'}")
 
         hist = latest_series(series_path)
