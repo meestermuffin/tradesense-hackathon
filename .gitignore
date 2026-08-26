@@ -13,3 +13,9 @@ __pycache__/
 # Internal tooling that describes the neighbouring private pipeline (containers, ports,
 # database and table names). Useless to anyone cloning this repo, and it stands on its own.
 .claude/skills/orient/
+
+# Scheduler output and the cycle lock — runtime state, not results.
+# data/nbbo/ and data/equity_curve.csv are deliberately NOT ignored: they are the
+# accruing evidence, and the NBBO captures cannot be reconstructed.
+logs/
+.cycle.lock
