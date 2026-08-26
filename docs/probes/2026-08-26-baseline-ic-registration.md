@@ -109,3 +109,59 @@ default.
   tested.
 - **The 30-DTE reference tenor is not the 5–9 DTE traded tenor.** This tests the regime measure, not
   the contract.
+
+---
+
+# Addendum — the registered statistic is mechanically inflated
+
+**Written 2026-08-26 after the first run, before the corrected run.** The original protocol's result
+(A: IC 0.1645, t 2.24, p 0.001 · B: IC 0.2359, t 3.39, p 0.001 — both **EVIDENCE**) is **recorded and
+then set aside**, for a defect in the statistic rather than in the data.
+
+## The defect
+
+`outcome = IV_t − RV_forward`, and both signals are functions of `IV_t`. **`IV_t` enters both sides
+with a positive sign.** A high-IV name scores high on the signal and high on the outcome for
+arithmetic reasons, independent of whether any variance premium is harvested. If IV were pure noise
+and RV constant, this statistic would approach IC = 1 for a signal with no economic content.
+
+This is falsification item 4 — *the statistic must match the deployed objective* — failed inside a
+registration written to be exhaustive over outcomes. **The original verdict is void, not weakened.**
+
+## What the deployed objective actually is
+
+Selling a spread collects premium proportional to `IV_t` and pays out against `RV_forward`. The
+**return on premium sold** is therefore approximately
+
+```
+outcome_normalised = (IV_t − RV_forward) / IV_t
+```
+
+which is scale-free in `IV_t`. Ranking should select name-days where a *larger fraction* of the
+premium sold is retained — not merely name-days where more premium is sold.
+
+## Corrected protocol — registered before the run
+
+Unchanged: universe, period, horizon 21, Newey–West lag 21, permutation seed 42, 1000 draws,
+within-day shuffle, both signal variants reported.
+
+**Changed: the outcome is `(IV_t − RV_forward) / IV_t`.**
+
+**Added: a control arm.** Signal **C = raw `IV_t` level**, no percentile, no normalisation against the
+name's own history. C is not a strategy — it is a measurement of how much of any IC is available from
+the IV level alone.
+
+### Reading, registered in advance
+
+| condition | consequence |
+|---|---|
+| A and B materially exceed C | the *ranking against a name's own history* is doing work beyond the IV level. This is the claim the strategy makes |
+| A and B ≈ C | the percentile machinery adds nothing over "sell whatever has the highest IV right now". **The signal as designed is not justified**, even if IC is positive |
+| C exceeds A and B | the percentile machinery is actively destroying information |
+
+Verdicts use the same decision table as the original protocol, applied to the normalised outcome, and
+the reported verdict remains **the weaker of A and B**.
+
+**The original run stays in the record.** It is what the registration asked for, it is what the
+protocol produced, and deleting it would hide that the protocol was wrong rather than the world
+surprising.
