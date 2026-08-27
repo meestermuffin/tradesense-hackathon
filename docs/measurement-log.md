@@ -249,3 +249,80 @@ entirely of calm days.
 
 The pattern is consistent and worth naming: thresholds were registered carefully, and the structure
 around them — the decision table, and whether the statistic matches the objective — was not.
+
+
+---
+
+## 2026-08-27 — the permutation null was 2.7× too narrow, and the IC is WEAK
+
+**Registration:** `docs/2026-08-27-block-permutation-registration.md`, committed at `8a45517`
+before the run. Raised by Solo. **Script:** `scripts/block_permutation.py`.
+
+This re-tests the *significance* of the baseline IC. It does not touch the point estimate.
+
+### The defect
+
+`permutation_p` shuffles the signal among names **within each session**, which breaks the
+name-to-outcome link but leaves both panels' time structure intact. The outcome is realized
+volatility over the **next 21 sessions** on daily data, so consecutive name-days share 20 of their
+21 outcome days. A null more independent than the data has too narrow a spread and returns a p that
+is too small.
+
+The record already showed it. Every published row read p = 0.0010, the floor at 1,000 draws,
+including the event-free row where Newey–West falls to **1.69** — about p 0.09 two-sided. A p-value
+that cannot distinguish a t of 2.45 from a t of 1.69 is not measuring anything.
+
+165 sessions at a 21-session horizon is roughly **7 independent windows**, not 1,807.
+
+### First design VOID — its own control caught it
+
+The primary null registered at `f898dea` was an exhaustive circular time shift. It came back with
+control C **significant** (p 0.0081), which the registration had named as the stop condition.
+
+The shift rotates a name's signal in time and pairs it with **that same name's** outcome. Name
+identity survives, so it tests *the association lagged*, not *no association*. Measured, it centres
+at −0.0470 on A and −0.1915 on C where a valid null centres at zero; C only scored "significant"
+because its actual of −0.1055 sat at the top of a null dragged downward.
+
+**Four registration defects have now been caught by their own registrations rather than by review.**
+
+### Corrected null — block-constant name permutation
+
+Permute the name labels as the within-day shuffle does, but hold one permutation fixed across a
+contiguous block of `L` sessions. Breaks the pairing *and* keeps the day-to-day persistence the
+overlap creates. `L=1` reduces to the published shuffle. **L=21 primary, 2,000 draws, seed
+20260827.**
+
+### Result
+
+Variant A, event-free sample (1,145 name-days) — the row the book actually trades:
+
+| | IC | NW t(21) | L=1 *(published)* | **L=21 primary** | L=42 | shift *(void)* |
+|---|---:|---:|---:|---:|---:|---:|
+| **A · IV percentile** | **+0.1561** | 1.69 | 0.0005 | **0.0660** | 0.0785 | ~~0.0081~~ |
+| B · IV ÷ trailing RV | +0.2563 | 3.38 | 0.0005 | 0.0145 | 0.0130 | ~~0.1694~~ |
+| C · raw IV level *(control)* | −0.0938 | −0.75 | 0.9940 | **0.7626** | 0.7556 | ~~0.0081~~ |
+
+Baseline sample (1,807 name-days): A +0.1753, L=21 p **0.0105** — still significant there.
+
+Null spread, variant A: sd 0.0387 at L=1 → **0.1042 at L=21**. The published null was **2.7× too
+narrow** on the event-free sample, 3.0× on the baseline.
+
+### Verdict — WEAK, per the table registered before the run
+
+> 0.05 < p ≤ 0.20 → **may not be called significant anywhere; reported as suggestive, with both
+> p-values shown.**
+
+**+0.1561 stands as a measurement. Its significance does not.** The two corrections agree without
+being related: Newey–West t 1.69 and block-permutation p 0.0660 both put it just outside
+conventional significance, which is the finding.
+
+The control behaved (p 0.7626), so the null is readable.
+
+### What this changes
+
+- The **p 0.0010 figure is withdrawn.** It was an artifact of a null too narrow by ~3×.
+- +0.1561 may be shown as suggestive with both p's, never as significant.
+- The baseline p 0.0105 survives, but the baseline includes name-days whose forward window contains
+  an earnings announcement — the sample the event-free arm exists to exclude.
+- **Nothing here rescues a backtest number.** Cost is still uncharged.

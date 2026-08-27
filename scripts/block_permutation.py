@@ -136,9 +136,9 @@ def run(label, per, excl, sessions):
     print(f"\n{'=' * 78}\n{label}\n{'=' * 78}")
     print(f"  sessions {sessions}   effective independent windows at H={H}: ~{sessions // H}")
     print(
-        f"\n  {'variant':34} {'IC':>8} {'NW t':>6} {'within-day':>11} {'SHIFT':>8} "
-        f"{'blk21':>7} {'blk42':>7}"
+        f"\n  {'variant':32} {'IC':>8} {'NW t':>6} {'L=1':>8} {'L=21':>8} {'L=42':>8} {'shift':>8}"
     )
+    print(f"  {'':32} {'':>8} {'':>6} {'(pub)':>8} {'PRIMARY':>8} {'':>8} {'VOID':>8}")
     print("  " + "-" * 84)
     results = {}
     for key, name in (

@@ -15,4 +15,8 @@ results destroys the property it exists for.
 | `test-a-directional-ic.md` | whether the signal carries directional information | nothing |
 | `delta-sweep.md` | delta × structure sweep | the widened NBBO capture, which is the only thing that can settle its load-bearing claim |
 
+`block-permutation.md` **has run** and moved to `docs/2026-08-27-block-permutation-registration.md`.
+Its result is in `docs/measurement-log.md`: the baseline IC's significance does not survive an
+overlap-corrected null.
+
 **None of these has run.** Anything citing a result from them is citing something that does not exist.
