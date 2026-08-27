@@ -35,24 +35,36 @@ OOS_START = "2025-03-01"
 ORIG_END = "2025-02-28"
 
 
-def window(per, lo=None, hi=None, excl=None):
-    """Filter built records by day. The trailing window is already baked in by J.build."""
+def window(per, lo=None, hi=None, excl=None, fwd_hi=None):
+    """Filter built records by day. The trailing window is already baked in by J.build.
+
+    `fwd_hi` additionally requires the FORWARD window to close by that date. Without it, filtering
+    the long series to the original dates is not the original sample: the final H sessions had no
+    forward outcome when the series ended there and gain one when it does not. That difference is
+    exactly 21 sessions x 11 names, and it is what tripped the anchor on the first run.
+    """
     out = {}
     for sym, (days, rec) in per.items():
         skip = excl.get(sym, set()) if excl else set()
-        keep = [
-            r
-            for r in rec
-            if (lo is None or r["day"] >= lo)
-            and (hi is None or r["day"] <= hi)
-            and r["day"] not in skip
-        ]
+        keep = []
+        for r in rec:
+            if lo is not None and r["day"] < lo:
+                continue
+            if hi is not None and r["day"] > hi:
+                continue
+            if r["day"] in skip:
+                continue
+            if fwd_hi is not None:
+                j = r["i"] + J.H
+                if j >= len(days) or days[j] > fwd_hi:
+                    continue
+            keep.append(r)
         out[sym] = (days, keep)
     return out
 
 
-def arm(label, per, key, excl=None, lo=None, hi=None):
-    sub = window(per, lo, hi, excl)
+def arm(label, per, key, excl=None, lo=None, hi=None, fwd_hi=None):
+    sub = window(per, lo, hi, excl, fwd_hi)
     pan = BP.panel(sub, key, None)
     actual, ics = BP.mean_ic_from(pan)
     if actual is None:
@@ -87,8 +99,8 @@ def main():
     print("ANCHOR — must reproduce the prior run on the original window")
     print("=" * 96)
     print(hdr)
-    anchor = arm("A · original 2024-03 → 2025-02", per, "A", hi=ORIG_END)
-    arm("C · original [CONTROL]", per, "C", hi=ORIG_END)
+    anchor = arm("A · original 2024-03 → 2025-02", per, "A", hi=ORIG_END, fwd_hi=ORIG_END)
+    arm("C · original [CONTROL]", per, "C", hi=ORIG_END, fwd_hi=ORIG_END)
 
     print("\n" + "=" * 96)
     print("PRIMARY — out-of-sample, sessions no prior test has touched")

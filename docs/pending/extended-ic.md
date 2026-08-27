@@ -76,3 +76,41 @@ information, which does not exist here.
 
 A SURVIVES verdict must be reported carrying this caveat. It is the strongest reason a judge could
 discount a favourable result, and it should not be theirs to discover.
+
+---
+
+# Addendum — the anchor was mis-specified, and it stopped the run
+
+**Written 2026-08-27, after the run at `96c85ca`.**
+
+The anchor arm returned IC **+0.1839** against the required +0.1753, on **2,038 name-days / 186
+sessions** where the prior run had 1,807 / 165. The registration's stop condition fired and the run
+halted.
+
+**Diagnosed exactly.** The difference is **231 name-days = 21 sessions × 11 names**, to the row. With
+the series ending 2025-02, the final `H=21` sessions had no forward outcome and were dropped; on the
+longer series they become scoreable. *Filtering the long series to the original dates is not the
+original sample.* The fault is in the anchor's definition, not the data or the panel.
+
+## Correction
+
+The anchor additionally requires the **forward window to close inside the original series**:
+`days[i + H] <= 2025-02-28`. This reconstructs the prior sample exactly and is strictly narrower
+than what was registered.
+
+**It cannot affect the primary arm.** The out-of-sample window is 2025-03 onward and never used the
+anchor's filter.
+
+## Disclosure
+
+**The primary result was printed before the stop condition was evaluated, and I have seen it.** The
+re-run is therefore confirmatory, not exploratory, and it is recorded that way. Two things make that
+survivable rather than fatal:
+
+- **The decision table is untouched.** It was fixed at `8a45517` and carried unchanged into
+  `96c85ca`, both before any of this ran. No threshold moves.
+- **The correction is mechanical and adverse-neutral.** It tightens the anchor and leaves the
+  primary arm bit-identical.
+
+Recording this rather than re-running quietly is the point. A registration that only binds when its
+result is unwelcome is not a registration.
