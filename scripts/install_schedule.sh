@@ -12,8 +12,29 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AGENTS="$HOME/Library/LaunchAgents"
-PY="$(command -v python3)"
 mkdir -p "$AGENTS" "$ROOT/logs"
+
+# The project venv, NOT `command -v python3`.
+#
+# On 2026-08-27 the plists pointed at the homebrew python3, which has no pydantic. Every job died
+# on import: no capture at 15:50, no cycle at 16:05, no equity row at 16:45. That session's NBBO is
+# gone permanently -- there is no historical options quote endpoint to backfill it from.
+#
+# The interpreter is now verified against a real project import BEFORE anything is installed. An
+# installer that writes four plists naming an interpreter it never tested is the whole failure.
+uv sync --frozen --quiet 2>/dev/null || uv sync --quiet
+PY="$ROOT/.venv/bin/python"
+if [ ! -x "$PY" ]; then
+  echo "!! $PY is missing. Run 'uv sync' first."
+  exit 1
+fi
+if ! "$PY" -c "import sys; sys.path.insert(0, '$ROOT'); import src.data.alpaca" 2>/dev/null; then
+  echo "!! $PY cannot import src.data.alpaca. Refusing to schedule an interpreter that cannot run"
+  echo "   the jobs. Reproduce with:"
+  echo "   $PY -c \"import sys; sys.path.insert(0,'$ROOT'); import src.data.alpaca\""
+  exit 1
+fi
+echo "  interpreter $PY -- verified it can import the project"
 
 if [ ! -f "$ROOT/.env" ]; then
   echo "!! $ROOT/.env is missing. Scheduled jobs have no environment and will fail."

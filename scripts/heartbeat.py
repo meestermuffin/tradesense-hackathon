@@ -102,11 +102,39 @@ def main():
         print("\n  no cycle log — the scheduler has never run run_cycle.py")
         all_problems += 1
 
+    # A job that RAN and CRASHED looks identical to one that never fired, from the artifacts
+    # alone. On 2026-08-27 all four died on a missing import and this reported "likeliest cause is
+    # sleep", which sends you to pmset instead of to the traceback sitting in logs/. Read stderr
+    # before guessing.
+    crashed = []
+    for name in ("capture", "cycle", "snapshot", "heartbeat"):
+        err = os.path.join(ROOT, "logs", f"{name}.err.log")
+        try:
+            if os.path.getsize(err) > 0:
+                age_h = (datetime.datetime.now().timestamp() - os.path.getmtime(err)) / 3600
+                if age_h < 48:
+                    last = [ln for ln in open(err).read().splitlines() if ln.strip()][-1]
+                    crashed.append((name, age_h, last[:120]))
+        except OSError:
+            pass
+
+    if crashed:
+        print("\n  stderr from scheduled jobs — these RAN and FAILED, they did not miss:")
+        for name, age_h, last in crashed:
+            print(f"    FAIL {name} wrote stderr {age_h:.1f}h ago: {last}")
+        all_problems += len(crashed)
+
     if all_problems:
-        print(
-            f"\n{all_problems} problem(s). On a machine that is meant to be running the book, the "
-            f"likeliest cause is sleep — `pmset -g sched` should show a weekday wake before 15:50."
-        )
+        if crashed:
+            print(
+                f"\n{all_problems} problem(s). {len(crashed)} job(s) ran and crashed — start with "
+                f"the stderr above, not with sleep. Full tracebacks in logs/*.err.log."
+            )
+        else:
+            print(
+                f"\n{all_problems} problem(s). Nothing wrote stderr, so the jobs did not run at "
+                f"all — `pmset -g sched` should show a weekday wake before 15:50."
+            )
         if "--notify" in sys.argv:
             os.system(
                 "osascript -e "
