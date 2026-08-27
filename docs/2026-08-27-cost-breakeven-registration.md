@@ -81,3 +81,56 @@ The wide names will not clear. SPY at 0.96% against AMD and MU above 5% is a 6×
 orders already put vertical cost at 9.7% of credit on SPY versus 34% on AMD. **If the verdict splits
 by name, that split is the finding** — and it is the evidence for or against Solo's proposal to
 trade only the tight names.
+
+---
+
+# Addendum — the run, and a defect in this registration's own statistic
+
+**Written 2026-08-27, after the run at `eb86625`.**
+
+## Registered result
+
+Event-free, N=10: gross edge **−8.36%** of premium against a measured round-trip of **55.4%** of
+net credit. Ratio −0.15×. **DOES NOT SURVIVE.** No name clears 2×; the best is SPY at **0.29×**.
+
+## The defect, found while checking the result
+
+The mean of `(IV_t − RV_fwd)/IV_t` is **not** the fraction of premium a *vertical* retains. The
+outcome is unbounded below and capped at +1 above, and dividing by `IV_t` makes it explode when
+implied vol is small. On the selected name-days:
+
+| | |
+|---|---:|
+| mean | −8.36% |
+| **median** | **+2.72%** |
+| minimum | **−1732%** |
+| mean of the worst 5% | −237% |
+| mean excluding the worst 5% | +3.61% |
+| share losing more than 100% of premium | 0.9% |
+
+**A defined-risk vertical cannot lose 1732% of its credit.** It is capped at `width − credit`.
+Flooring the outcome accordingly:
+
+| loss floor | mean gross edge |
+|---|---:|
+| unfloored *(as registered)* | −8.36% |
+| −100% of premium | **−0.33%** |
+| −400% of credit *(a 5-wide at 1.00)* | **−1.89%** |
+
+**This is why the rank IC and this bound disagree without contradicting each other.** Rank IC is
+invariant to the tail pathology — ranks do not care that one observation is −1732%. Any *mean*-based
+statistic on the same outcome is dominated by it. The two were never measuring compatible things,
+and this registration did not notice before specifying the mean.
+
+## What the verdict is, after the correction
+
+**Unchanged, and for a stronger reason.** Under every flooring, the gross edge on the selected names
+is **negative or indistinguishable from zero before any transaction cost is charged at all**. Cost
+never becomes the binding constraint, so the bound cannot be cleared by trading tighter names:
+SPY is the tightest in the universe and returns +4.38% gross against a 15.3% round-trip, 0.29×.
+
+## Status
+
+The registered arm stands as run. **A mean-based edge on this outcome needs its own registration
+with the structural cap specified before it can be quoted as a number** — the floored figures above
+are a diagnosis of why the registered statistic was the wrong one, not a result.

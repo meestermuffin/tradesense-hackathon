@@ -19,4 +19,7 @@ results destroys the property it exists for.
 Its result is in `docs/measurement-log.md`: the baseline IC's significance does not survive an
 overlap-corrected null.
 
+`cost-breakeven.md` **has run** and moved to `docs/2026-08-27-cost-breakeven-registration.md`.
+The edge does not clear its own transaction costs -- and is ~0 before they are charged.
+
 **None of these has run.** Anything citing a result from them is citing something that does not exist.

@@ -326,3 +326,52 @@ The control behaved (p 0.7626), so the null is readable.
 - The baseline p 0.0105 survives, but the baseline includes name-days whose forward window contains
   an earnings announcement — the sample the event-free arm exists to exclude.
 - **Nothing here rescues a backtest number.** Cost is still uncharged.
+
+
+---
+
+## 2026-08-27 — the cost bound: the edge is gone before cost is charged
+
+**Registration:** `docs/2026-08-27-cost-breakeven-registration.md`, committed at `eb86625` before
+the run. Proposed by Solo. **Script:** `scripts/cost_breakeven.py`.
+
+Bound the cost rather than estimate it, because the estimate may not be buildable: no historical
+option quotes, name identity dominates the spread, best bar proxy +0.036 cross-name.
+
+### Measured round-trip cost, as a share of NET CREDIT
+
+Crossing twice at the 82% of half-spread a marketable order actually paid, scaled by what a vertical
+costs against its credit rather than against mid (9.7% SPY / 34% AMD, from the two test orders):
+
+| SPY | TSLA | NVDA | AAPL | MSFT | AMZN | AMD | META | INTC | GOOGL | MU |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 15.3% | 24.3% | 26.1% | 48.1% | 51.3% | 54.7% | 57.9% | 75.9% | 82.2% | 83.3% | 89.7% |
+
+### Result — DOES NOT SURVIVE
+
+Event-free, N=10: gross edge **−8.36%** of premium, measured cost **55.4%**, ratio **−0.15×**.
+**No name clears 2×. The best is SPY at 0.29×.**
+
+### The registered statistic was the wrong one, and it does not change the verdict
+
+The mean of `(IV−RV_fwd)/IV` is unbounded below, capped at +1 above, and explodes when `IV_t` is
+small. Median **+2.72%** against a mean of −8.36%; minimum **−1732%**; the worst 5% average −237%.
+A vertical caps loss at `width − credit` and cannot lose 1732% of its credit.
+
+Flooring the loss: **−0.33%** at −100% of premium, **−1.89%** at −400% of credit.
+
+**Under every flooring the gross edge is negative or indistinguishable from zero *before any cost is
+charged*.** Cost is not the binding constraint, so trading only the tight names does not rescue it.
+
+This also explains why the rank IC and this bound disagree without contradicting: rank IC is
+invariant to the tail, and any mean-based statistic on the same outcome is dominated by it. They
+were never measuring compatible quantities.
+
+### Combined with the same day's null correction
+
+- The IC is **WEAK** (p 0.0660, corrected null) — the ranking is suggestive, not significant.
+- The **gross edge on the names it selects is ≈0 or negative before cost.**
+
+**No backtest number is quotable, and the cost model is no longer the thing blocking it.** A
+mean-based edge on this outcome needs its own registration with the structural cap specified before
+any figure from it is quoted.
