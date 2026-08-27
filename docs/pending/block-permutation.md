@@ -92,3 +92,76 @@ retracts a significance claim, not a measurement.
 
 **The bar is the same for both directions.** If the corrected p is favourable, the corrected number
 is what gets quoted — not the smaller within-day one that happens to look better.
+
+---
+
+# Addendum — the first design was void, and its own control said so
+
+**Written 2026-08-27, after the run registered above and before the corrected one.** The run at
+`f898dea` is **VOID**. It is recorded here rather than deleted, because the reason it failed is the
+finding.
+
+## What happened
+
+The registered validity check fired: control C came back significant (shift p 0.0081) alongside a
+"SURVIVES" reading for A. Per the registration, no arm from that run is readable — including the
+favourable one.
+
+## Why — the circular shift never breaks the pairing
+
+It rotates each name's signal in time and pairs it with **that same name's** outcome. Name identity
+survives the shift, so the null is not "no association between this name's signal and its outcome" —
+it is "the association, lagged". For a persistent signal that is barely a perturbation at all.
+
+Where each null sits, measured:
+
+| | null mean | null sd |
+|---|---:|---:|
+| within-day, variant A | +0.0009 | 0.0265 |
+| within-day, control C | +0.0013 | 0.0278 |
+| **circular shift, variant A** | **−0.0470** | 0.0780 |
+| **circular shift, control C** | **−0.1915** | 0.0232 |
+
+A valid null centres near zero. The shift centres at −0.19 on the control, which is why C scored
+"significant" against it: C's actual of −0.1055 sits at the *top* of a null that has been dragged
+downward. The shift was not a null. It was a different statistic.
+
+## The corrected null — block-constant name permutation
+
+Three properties are needed at once, and each of the first two designs had only two of them:
+
+| | breaks name↔outcome | keeps 21-session overlap | unbiased |
+|---|---|---|---|
+| within-day shuffle | yes | **no** | yes |
+| circular shift | **no** | yes | **no** |
+| **block-constant name permutation** | **yes** | **yes** | **yes** |
+
+Permute the name labels, as the within-day shuffle does, but hold one permutation fixed across a
+contiguous block of `L` sessions instead of redrawing every session. The pairing is broken, and the
+resampled IC series acquires the same day-to-day persistence the observed one has.
+
+Validated on the **control only**, deliberately blind to variant A:
+
+| L | null mean | null sd |
+|---|---:|---:|
+| 1 *(reduces to within-day)* | −0.0022 | 0.0245 |
+| **21** *(primary — the outcome horizon)* | −0.0029 | **0.0924** |
+| 42 *(secondary)* | −0.0015 | **0.1030** |
+
+Unbiased at every length, and **the published within-day null is 3.8× too narrow.** That factor is
+the whole of Solo's objection, and it is close to what Newey-West already implied.
+
+| | |
+|---|---|
+| primary | `L = 21`, 2,000 draws, **seed 20260827** |
+| secondary | `L = 42`, same draws and seed |
+| reproduction arm | `L = 1`, which must reproduce the published within-day p |
+| decision | **the table above, unchanged** |
+
+**The thresholds are not being touched.** 0.05 and 0.20 were committed at `f898dea` before any of
+this was measured. Having now seen the null's spread, we can anticipate roughly where A will land —
+which is exactly the circumstance in which moving a threshold would be indefensible. They stand.
+
+**What is expected, stated before the run:** a p near the 0.05 boundary, since +0.1561 against a
+null sd of 0.0924 is about 1.7 sigma, and the Newey-West t on that sample is 1.69. If the two
+independent corrections agree, that is the finding, whichever side of 0.05 it lands.

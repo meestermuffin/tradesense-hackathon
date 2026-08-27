@@ -10,12 +10,16 @@ too narrow and the p-value comes out too small.
 
 Three nulls, side by side:
 
-  within-day   the published one, as a reproduction check
-  shift        PRIMARY. Rotate each name's signal in time by a common offset, outcomes held in
-               place. Preserves every autocorrelation and the cross-name co-movement; destroys only
-               the signal-to-outcome alignment. Exhaustive over 124 offsets, so it is exact and
-               DETERMINISTIC -- no seed.
-  block        Contiguous session blocks reassigned at random. Robustness reading.
+  within-day   the published one (L=1), as a reproduction check
+  block        PRIMARY. Permute the NAME labels as within-day does, but hold one permutation fixed
+               across a contiguous block of L sessions instead of redrawing every session. Breaks
+               the name-to-outcome pairing AND keeps the day-to-day persistence the outcome's
+               21-session overlap creates. L=21 primary, L=42 secondary.
+  shift        VOID, reported only so the record shows why. Rotating a name's signal in time pairs
+               it with THAT SAME NAME's outcome, so identity survives and the null is "the
+               association, lagged" rather than no association. Measured: it centres at -0.19 on the
+               control instead of 0. Its own control caught it. See the addendum in the
+               registration.
 """
 
 import os
@@ -26,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import json  # noqa: E402
 import random  # noqa: E402
+import statistics  # noqa: E402
 
 import job2_earnings as J  # noqa: E402
 
@@ -33,8 +38,8 @@ from src.data.files import FileFeatureSource  # noqa: E402
 from src.measurement.stats import newey_west_t, spearman  # noqa: E402
 
 H = J.H
-BLOCK_LENGTHS = (21, 42)
-BLOCK_DRAWS = 10_000
+BLOCK_LENGTHS = (1, 21, 42)
+BLOCK_DRAWS = 2000
 BLOCK_SEED = 20260827
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data", "iv_series_2024-03_2025-02.csv.gz")
@@ -79,22 +84,29 @@ def shifted(pan, s):
     return out
 
 
-def block_shuffled(pan, L, rng):
-    """Cut each name's signal into contiguous blocks of L and reassign the blocks."""
-    out = {}
-    order = None
-    for sym, rows in pan.items():
-        n = len(rows)
-        sigs = [r[1] for r in rows]
-        blocks = [sigs[i : i + L] for i in range(0, n, L)]
-        if order is None or len(order) != len(blocks):
-            order = list(range(len(blocks)))
-            rng.shuffle(order)
-        flat = [v for b in (blocks[i] for i in order) for v in b][:n]
-        while len(flat) < n:
-            flat.append(sigs[len(flat)])
-        out[sym] = [(rows[i][0], flat[i], rows[i][2]) for i in range(n)]
-    return out
+def block_name_perm(pan, L, rng):
+    """PRIMARY null. Permute name labels, one permutation held fixed per block of L sessions.
+
+    L=1 is the published within-day shuffle. Larger L keeps the persistence that the 21-session
+    outcome overlap puts into the real IC series, which is the whole correction.
+    """
+    days = sorted({d for rows in pan.values() for d, _, _ in rows})
+    names = sorted(pan)
+    sig = {(s, d): v for s, rows in pan.items() for d, v, _ in rows}
+    perm_for = {}
+    for bi in range(0, len(days), L):
+        shuf = names[:]
+        rng.shuffle(shuf)
+        mapping = dict(zip(names, shuf, strict=True))
+        for d in days[bi : bi + L]:
+            perm_for[d] = mapping
+    new = {s: [] for s in names}
+    for s in names:
+        for d, _, o in pan[s]:
+            src_name = perm_for[d][s]
+            if (src_name, d) in sig:
+                new[s].append((d, sig[(src_name, d)], o))
+    return new
 
 
 def within_day(pan, rng):
@@ -138,29 +150,31 @@ def run(label, per, excl, sessions):
         actual, ics = mean_ic_from(pan)
         t = newey_west_t(ics, H)
 
-        rng = random.Random(42)
-        wd = [mean_ic_from(within_day(pan, rng))[0] for _ in range(1000)]
-        p_wd = p_from(actual, wd)
-
-        longest = max(len(r) for r in pan.values())
-        offsets = list(range(H, longest - H))
-        sh = [mean_ic_from(shifted(pan, s))[0] for s in offsets]
-        p_sh = p_from(actual, sh)
-
-        pb = {}
+        pb, sd = {}, {}
         for L in BLOCK_LENGTHS:
             rng = random.Random(BLOCK_SEED)
-            draws = [mean_ic_from(block_shuffled(pan, L, rng))[0] for _ in range(400)]
+            draws = [mean_ic_from(block_name_perm(pan, L, rng))[0] for _ in range(BLOCK_DRAWS)]
+            draws = [d for d in draws if d is not None]
             pb[L] = p_from(actual, draws)
+            sd[L] = statistics.stdev(draws)
+
+        # Reported only so the record carries why it is void. See the registration addendum.
+        longest = max(len(r) for r in pan.values())
+        sh = [mean_ic_from(shifted(pan, s))[0] for s in range(H, longest - H)]
+        p_sh = p_from(actual, sh)
 
         print(
-            f"  {name:34} {actual:>+8.4f} {t:>6.2f} {p_wd:>11.4f} {p_sh:>8.4f} "
-            f"{pb[21]:>7.4f} {pb[42]:>7.4f}"
+            f"  {name:32} {actual:>+8.4f} {t:>6.2f} {pb[1]:>8.4f} {pb[21]:>8.4f} "
+            f"{pb[42]:>8.4f} {p_sh:>8.4f}"
         )
-        results[key] = dict(ic=actual, t=t, p_wd=p_wd, p_shift=p_sh, p_blk=pb, offsets=len(offsets))
+        results[key] = dict(ic=actual, t=t, p_blk=pb, sd=sd, p_shift=p_sh)
+    a = results["A"]
     print(
-        f"\n  shift offsets evaluated: {results['A']['offsets']} (exhaustive, deterministic, "
-        f"min attainable p {1 / (results['A']['offsets'] + 1):.4f})"
+        f"\n  null sd, variant A:  L=1 {a['sd'][1]:.4f}   L=21 {a['sd'][21]:.4f}   "
+        f"L=42 {a['sd'][42]:.4f}   (L=21 is {a['sd'][21] / a['sd'][1]:.1f}x the published null)"
+    )
+    print(
+        f"  draws {BLOCK_DRAWS}   seed {BLOCK_SEED}   min attainable p {1 / (BLOCK_DRAWS + 1):.4f}"
     )
     return results
 
@@ -198,23 +212,23 @@ def main():
     print(f"\n{'=' * 78}")
     print("REGISTERED DECISION — variant A, event-free sample, primary null")
     print("=" * 78)
-    p = ev["A"]["p_shift"]
+    p = ev["A"]["p_blk"][21]
     v = verdict(p)
-    print(f"  within-day p (published) {ev['A']['p_wd']:.4f}   ->   circular-shift p {p:.4f}")
+    print(f"  within-day p (L=1, published) {ev['A']['p_blk'][1]:.4f}   ->   block L=21 p {p:.4f}")
     print(f"  IC {ev['A']['ic']:+.4f} unchanged.  NW t {ev['A']['t']:.2f}")
     print(f"\n  VERDICT: {v}")
     print(
         {
             "SURVIVES": "  +0.1561 may be quoted, with the corrected p stated beside it.",
-            "WEAK": "  May NOT be called significant anywhere. Report as suggestive, both p's shown.",
+            "WEAK": "  May NOT be called significant. Report as suggestive, both p's shown.",
             "NO EVIDENCE": "  Headline WITHDRAWN from deck, video and repo.",
         }[v]
     )
 
-    pc = ev["C"]["p_shift"]
-    print(f"\n  null validity check — control C under the same shift: p {pc:.4f}")
+    pc = ev["C"]["p_blk"][21]
+    print(f"\n  null validity check — control C under the same block null: p {pc:.4f}")
     if pc <= 0.05:
-        print("  !! C IS SIGNIFICANT. The shift has introduced an artifact and NO arm above is")
+        print("  !! C IS SIGNIFICANT. The null has an artifact and NO arm above is")
         print("     readable, including a favourable one. Registration says stop here.")
         return 1
     print("  C remains non-significant. The null is behaving.")
