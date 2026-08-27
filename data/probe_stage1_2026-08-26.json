@@ -1,0 +1,24 @@
+{
+  "SPY": {
+    "sessions": 250,
+    "picks": 249,
+    "contracts": 428,
+    "legbars": 496,
+    "passing": 490,
+    "n_med": 130.0,
+    "v_med": 696.0,
+    "n_p10": 42,
+    "floor": "2024-03-01"
+  },
+  "AMD": {
+    "sessions": 250,
+    "picks": 249,
+    "contracts": 390,
+    "legbars": 316,
+    "passing": 297,
+    "n_med": 95.5,
+    "v_med": 379.0,
+    "n_p10": 28,
+    "floor": "2024-03-01"
+  }
+}

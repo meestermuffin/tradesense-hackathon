@@ -1,0 +1,66 @@
+[project]
+name = "tradesense"
+version = "0.1.0"
+description = "Options volatility-premium trading agent — Alpaca AI Trading Agents Hackathon"
+requires-python = ">=3.13"
+license = "MIT"
+dependencies = [
+    "pydantic>=2.9",
+]
+
+[tool.uv]
+package = false
+
+# Runtime dependency policy: pydantic, and nothing else without a reason written here.
+#
+# src/ was standard-library-only until 2026-08-26. That guarantee bought a clone-and-run repo; it
+# cost validation at the one place it matters, which is where Alpaca JSON crosses into this code.
+# An absent `greeks` key on an otherwise-200 response is this project's most-repeated failure, and
+# a dict silently returning None for it is exactly how that failure stays quiet. Pydantic makes the
+# boundary raise instead.
+#
+# No database driver, still. That rule is unchanged and is about what teammates can run.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+# scripts/iv_series_probe.py is deliberately excluded from formatting.
+# Two committed pre-registrations name that file and its commit as the definition of how the IV
+# series was built. Reformatting it would leave the working copy differing from the file the
+# registrations describe, and anyone checking reproducibility would have to decide whether the
+# differences are cosmetic. Keeping it byte-identical costs nothing and removes that question.
+extend-exclude = ["scripts/iv_series_probe.py"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes — unused imports, undefined names
+    "I",    # import sorting
+    "UP",   # pyupgrade — modern syntax
+    "B",    # bugbear — likely bugs, mutable defaults, unused loop vars
+]
+ignore = [
+    "E741",  # ambiguous variable name: `l` reads fine in short numeric loops here
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Scripts add the repo root to sys.path before importing from src/, so their imports cannot sit at
+# the top of the file. This is a deliberate structure, not an oversight.
+"scripts/*.py" = ["E402"]
+
+[tool.ruff.format]
+quote-style = "double"
+docstring-code-format = true
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.6",
+]
