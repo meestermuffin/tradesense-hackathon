@@ -375,3 +375,67 @@ were never measuring compatible quantities.
 **No backtest number is quotable, and the cost model is no longer the thing blocking it.** A
 mean-based edge on this outcome needs its own registration with the structural cap specified before
 any figure from it is quoted.
+
+
+---
+
+## 2026-08-27 — the signal does not replicate out-of-sample. WITHDRAWN.
+
+**Registration:** `docs/2026-08-27-extended-ic-registration.md`, committed at `96c85ca` before the
+run, anchor corrected at `7ce4f4e`. **Script:** `scripts/extended_ic.py`.
+
+Every prior IC test used 249 sessions (~11 independent windows). The committed longer series has
+597, and is a strict superset — all 2,731 overlapping rows byte-identical.
+
+### Result
+
+| arm | name-days | sessions | IC | NW t(21) | p | null sd |
+|---|---:|---:|---:|---:|---:|---:|
+| **anchor** · original 2024-03 → 2025-02 | 1,807 | 165 | **+0.1753** | 2.45 | 0.0100 | 0.0736 |
+| **PRIMARY · A · out-of-sample 2025-03 → 2026-08** | **3,590** | **327** | **+0.0414** | **0.72** | **0.2184** | 0.0507 |
+| C · out-of-sample *(control)* | 3,590 | 327 | −0.1425 | −1.80 | 0.9915 | 0.0602 |
+| A · full series | 5,628 | 513 | +0.0931 | 2.04 | 0.0150 | 0.0411 |
+| A · event-free through 2025-06 | 1,852 | 256 | +0.1432 | 2.30 | 0.0415 | 0.0814 |
+
+The anchor reproduces the prior run exactly, so the panel is the same one.
+
+### Verdict — NO EVIDENCE, per the table registered before the run
+
+> p > 0.20 → **withdrawn. Signal work stops.**
+
+**+0.1753 → +0.0414 on 327 sessions no test had touched.** Newey–West t 0.72. The control validates
+the null at p 0.9915.
+
+The full-series arm reads p 0.0150, but it *contains* the original window and is not independent
+evidence. The event-free arm is likewise almost entirely the original period, since earnings data
+stops 2025-06-25.
+
+### What this settles
+
+**The IV-percentile ranking does not replicate.** The original result was 11 independent windows,
+and 15 fresh ones do not reproduce it. Combined with the same day's other two runs:
+
+| | |
+|---|---|
+| significance on the original sample | WEAK (p 0.0660, corrected null) |
+| **replication out-of-sample** | **NO EVIDENCE (p 0.2184)** |
+| gross edge before cost | unresolved; the registered statistic priced the wrong structure |
+
+**No signal claim survives.** Nothing in the deck, video or repo may assert predictive skill.
+
+### The one thing that did not collapse
+
+Raw IV level, the control, is **consistently harmful** and gets more so out-of-sample: −0.1055 →
+−0.1425, t −1.80. Ranking each name against its own history stays above ranking on absolute IV in
+every arm. **That gap has never been tested as a paired comparison** and is not a claim — but it is
+the only structure in the data that persisted.
+
+### Anchor defect, recorded
+
+The first run halted on its own stop condition: the anchor returned +0.1839 on 2,038 name-days
+instead of +0.1753 on 1,807. The difference was exactly 21 sessions × 11 names — the final `H`
+sessions, unscoreable when the series ended in 2025-02 and scoreable on the longer one. Filtering
+the long series to the original dates is not the original sample. The anchor now also requires the
+forward window to close in-sample. **The primary result was printed before the stop condition was
+evaluated and had been seen, so the re-run is recorded as confirmatory rather than exploratory; the
+correction is adverse-neutral and the decision table never moved.**

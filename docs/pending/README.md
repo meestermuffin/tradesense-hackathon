@@ -22,4 +22,7 @@ overlap-corrected null.
 `cost-breakeven.md` **has run** and moved to `docs/2026-08-27-cost-breakeven-registration.md`.
 The edge does not clear its own transaction costs -- and is ~0 before they are charged.
 
+`extended-ic.md` **has run** and moved to `docs/2026-08-27-extended-ic-registration.md`.
+**The signal does not replicate out-of-sample: +0.1753 -> +0.0414, p 0.2184. WITHDRAWN.**
+
 **None of these has run.** Anything citing a result from them is citing something that does not exist.
