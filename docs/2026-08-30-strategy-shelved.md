@@ -56,20 +56,30 @@ and every registration precedes its results in git. It found four defects, three
 recorded, and they change how much weight each run carries:
 
 - **The shelving rests principally on run 3.** It is the only one of the three with no defect found.
-- **Run 1 is boundary-indeterminate.** Its permutation null drops **25.2% of name-days per draw** on
-  the ragged event-free panel, inflating the null spread by ~10–13%. Drop-corrected, p ≈
-  **0.046–0.049** against a reported 0.0660 — straddling the registered 0.05 threshold. **Run 1's
-  WEAK could as easily have read SURVIVES**, and "the published null was 2.7× too narrow" is
-  honestly ~2.4×. Run 3 is untouched by this: 0.2% drops.
+- **Run 1's verdict has since been corrected to SURVIVES.** Its null dropped **29.3% of name-days
+  per draw** on the ragged event-free panel. Re-run with an availability-preserving null (0.0%
+  drops, 10 seeds, registered at `657ed67`), run 1 reads **p 0.0331**, not 0.0660. On the original
+  sample the signal *was* significant. Run 3 is untouched by this defect: 0.2% drops.
 - **Run 2 is an interval, not a point** — see above.
 - **Arm C is not a null-validity control.** Raw IV level carries genuine negative association, so it
   was never association-free. Two-sided it *is* significant (p 0.0180 out-of-sample). What it
   establishes is that the null is **centred**, which was verified directly (means −0.0028 / +0.0016 /
   +0.0024 / −0.0004 across the decision arms). The earlier print, "the null is behaving", overclaimed.
 
-None of this revives the strategy. Reviving it would require run 3 to be wrong, and run 3 is the one
-run with nothing found against it — a drop-free null on that arm would have to read p ≤ 0.05 against
-a measured z of 0.82, which is effectively unreachable.
+None of this revives the strategy — and the corrected run 1 makes the case **cleaner**, not weaker:
+
+| | |
+|---|---|
+| original sample, 165 sessions | **+0.1561, p 0.0331 — significant** |
+| out-of-sample, 327 sessions | **+0.0414, p 0.2184 — nothing** |
+
+Significant in-sample, absent out-of-sample, is the textbook signature of overfitting. Reviving the
+strategy would require run 3 to be wrong, and run 3 is the one run with nothing found against it —
+a drop-free null there would have to read p ≤ 0.05 against a measured z of 0.82.
+
+A probe against an IV-free outcome (`−RV_fwd`) reversed A's out-of-sample sign to −0.1542,
+consistent with part of the in-sample result being mechanical. That outcome carries a name-level
+confound of its own, so it is corroboration, not a clean settle.
 
 ## What is shelved
 

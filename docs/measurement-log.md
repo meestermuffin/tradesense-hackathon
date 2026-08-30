@@ -445,3 +445,76 @@ the long series to the original dates is not the original sample. The anchor now
 forward window to close in-sample. **The primary result was printed before the stop condition was
 evaluated and had been seen, so the re-run is recorded as confirmatory rather than exploratory; the
 correction is adverse-neutral and the decision table never moved.**
+
+
+---
+
+## 2026-08-30 — review remediation: run 1's verdict changes to SURVIVES
+
+**Registration:** `docs/2026-08-30-review-remediation-registration.md`, committed at `657ed67`
+before the run. **Script:** `scripts/review_remediation.py`. Both probes come from the independent
+review at `.claude/private/2026-08-30-shelving-runs-review.md`.
+
+### Probe 1 — the null was dropping a third of the panel
+
+`block_name_perm` dropped a name-day whenever the permuted source name had no row that day. On run
+1's ragged event-free panel that is **29.3% of name-days per draw**, so the null was computed on a
+panel smaller and differently shaped than the observed one, and its spread was inflated.
+
+The fix draws one priority ordering per block and induces a permutation **on the names present each
+session** — a bijection on the observed set. Measured drop rate: **0.0%**.
+
+| null | p | sd |
+|---|---:|---:|
+| dropping *(as published)* | 0.0665 | 0.1059 |
+| **availability-preserving, mean of 10 seeds** | **0.0331** | ~0.085 |
+
+Range 0.0280–0.0410 across seeds, se 0.0014. Null means −0.0027 to +0.0026 — centred.
+
+**REGISTERED DECISION: run 1's verdict is corrected WEAK → SURVIVES, on the original sample only.**
+
+### This does not unshelve, and the registration said so before the run
+
+Run 3 is the load-bearing run: drop-free at 0.2%, 327 sessions no other run touched, **p 0.2184 at
+z 0.82**. Probe 1 speaks only to the original 249-session sample, which run 3 supersedes.
+
+**It makes the record cleaner, not weaker.** The corrected reading is:
+
+| | |
+|---|---|
+| original sample (165 sessions) | **+0.1561, p 0.0331 — significant** |
+| out-of-sample (327 sessions) | **+0.0414, p 0.2184 — nothing** |
+
+A signal that is significant in-sample and absent out-of-sample is the textbook signature of
+overfitting. That is a more informative finding than "weak in both", and it is what the shelving now
+rests on.
+
+### Probe 2 — A reverses against an IV-free outcome
+
+Claim 23, the review's single UNTESTED item. The registered outcome contains `IV_t` and signal A is
+a function of `IV_t`; arm C closes only the cross-name *level* channel.
+
+| arm | outcome | IC | NW t | p |
+|---|---|---:|---:|---:|
+| A · out-of-sample | registered `(IV−RV_fwd)/IV` | +0.0414 | 0.72 | 0.2129 |
+| A · out-of-sample | **`−RV_fwd`, IV-free** | **−0.1542** | −1.98 | 0.9935 |
+| C · out-of-sample | registered | −0.1425 | −1.80 | 0.9905 |
+| C · out-of-sample | `−RV_fwd`, IV-free | −0.8685 | −72.65 | 1.0000 |
+
+Registered reading: *reverses → the in-sample result was partly mechanical, and the shelving is
+strengthened.* That is the direction observed.
+
+**Caveat we are recording rather than glossing.** `−RV_fwd` is not scale-free, so ranking on it is
+dominated by permanent name-level volatility differences — C reads −0.8685 at t −72.65, which is a
+level effect, not a signal. The probe is directionally consistent with the registered reading, but
+the outcome carries a confound of its own and this is **not a clean settle** of claim 23. A proper
+version needs a scale-free IV-free outcome, which is not registered and has not been run.
+
+### Errata closed the same day
+
+- **D3.** Round-trip cost was overstated by exactly **2.00×** — the 9.7%/34% calibrators are already
+  complete round trips. Pooled 55.4% → **27.7%**, SPY 15.3% → **7.7%**. Verdict re-derived, stands.
+- **D1.** The validity check was upper-tail only and could not see a significantly negative arm. Now
+  two-sided, with the null mean reported. C is renamed a **comparison arm**: raw IV level carries
+  genuine negative association and was never association-free.
+- **D4.** Log's `0.0105` was the L=42 column; the committed script prints **0.0100** at L=21.

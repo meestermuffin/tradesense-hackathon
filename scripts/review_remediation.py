@@ -87,11 +87,16 @@ def run_null(pan, perm_fn, seed):
     return [d for d in draws if d is not None]
 
 
-def probe1(per, cont):
+def probe1(_per_unused, _cont_unused):
     print("=" * 84)
     print("PROBE 1 — availability-preserving null on run 1's decision arm (defect D2)")
     print("=" * 84)
-    pan = BP.panel(EI.window(per, excl=cont), "A", None)
+    # Run 1 used the SHORT series (BP.DATA), not the long one, and its own earnings exclusion.
+    # Building this from the long series silently treats every post-2025-06 name-day as
+    # event-free, because the earnings file stops there. That is a different sample.
+    per = J.build(FileFeatureSource(BP.DATA))
+    cont = J.forward_contaminated(per, json.load(open(J.EARN)))
+    pan = BP.panel(per, "A", cont)
     actual, ics = BP.mean_ic_from(pan)
     t = newey_west_t(ics, BP.H)
     print(f"  variant A, event-free: IC {actual:+.4f}, NW t {t:.2f}")
@@ -99,10 +104,8 @@ def probe1(per, cont):
     d_old = drop_rate(pan, BP.block_name_perm, SEEDS[0])
     d_new = drop_rate(pan, avail_block_perm, SEEDS[0])
     print(
-        print(
-            f"\n  drop rate per draw — dropping null {d_old:.1f}%   "
-            f"availability-preserving {d_new:.1f}%"
-        )
+        f"\n  drop rate per draw — dropping null {d_old:.1f}%   "
+        f"availability-preserving {d_new:.1f}%"
     )
     if d_new > 0.05:
         print("  !! VALIDITY CHECK FAILED: the fix still drops name-days. Run is void.")

@@ -26,3 +26,5 @@ The edge does not clear its own transaction costs -- and is ~0 before they are c
 **The signal does not replicate out-of-sample: +0.1753 -> +0.0414, p 0.2184. WITHDRAWN.**
 
 **None of these has run.** Anything citing a result from them is citing something that does not exist.
+
+`review-remediation.md` **has run** and moved to `docs/2026-08-30-review-remediation-registration.md`. Run 1's verdict is corrected WEAK → SURVIVES on the original sample; the shelving is unaffected and rests on run 3.
