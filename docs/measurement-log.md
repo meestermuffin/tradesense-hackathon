@@ -249,3 +249,272 @@ entirely of calm days.
 
 The pattern is consistent and worth naming: thresholds were registered carefully, and the structure
 around them — the decision table, and whether the statistic matches the objective — was not.
+
+
+---
+
+## 2026-08-27 — the permutation null was 2.7× too narrow, and the IC is WEAK
+
+**Registration:** `docs/2026-08-27-block-permutation-registration.md`, committed at `8a45517`
+before the run. Raised by Solo. **Script:** `scripts/block_permutation.py`.
+
+This re-tests the *significance* of the baseline IC. It does not touch the point estimate.
+
+### The defect
+
+`permutation_p` shuffles the signal among names **within each session**, which breaks the
+name-to-outcome link but leaves both panels' time structure intact. The outcome is realized
+volatility over the **next 21 sessions** on daily data, so consecutive name-days share 20 of their
+21 outcome days. A null more independent than the data has too narrow a spread and returns a p that
+is too small.
+
+The record already showed it. Every published row read p = 0.0010, the floor at 1,000 draws,
+including the event-free row where Newey–West falls to **1.69** — about p 0.09 two-sided. A p-value
+that cannot distinguish a t of 2.45 from a t of 1.69 is not measuring anything.
+
+165 sessions at a 21-session horizon is roughly **7 independent windows**, not 1,807.
+
+### First design VOID — its own control caught it
+
+The primary null registered at `f898dea` was an exhaustive circular time shift. It came back with
+control C **significant** (p 0.0081), which the registration had named as the stop condition.
+
+The shift rotates a name's signal in time and pairs it with **that same name's** outcome. Name
+identity survives, so it tests *the association lagged*, not *no association*. Measured, it centres
+at −0.0470 on A and −0.1915 on C where a valid null centres at zero; C only scored "significant"
+because its actual of −0.1055 sat at the top of a null dragged downward.
+
+**Four registration defects have now been caught by their own registrations rather than by review.**
+
+### Corrected null — block-constant name permutation
+
+Permute the name labels as the within-day shuffle does, but hold one permutation fixed across a
+contiguous block of `L` sessions. Breaks the pairing *and* keeps the day-to-day persistence the
+overlap creates. `L=1` reduces to the published shuffle. **L=21 primary, 2,000 draws, seed
+20260827.**
+
+### Result
+
+Variant A, event-free sample (1,145 name-days) — the row the book actually trades:
+
+| | IC | NW t(21) | L=1 *(published)* | **L=21 primary** | L=42 | shift *(void)* |
+|---|---:|---:|---:|---:|---:|---:|
+| **A · IV percentile** | **+0.1561** | 1.69 | 0.0005 | **0.0660** | 0.0785 | ~~0.0081~~ |
+| B · IV ÷ trailing RV | +0.2563 | 3.38 | 0.0005 | 0.0145 | 0.0130 | ~~0.1694~~ |
+| C · raw IV level *(control)* | −0.0938 | −0.75 | 0.9940 | **0.7626** | 0.7556 | ~~0.0081~~ |
+
+Baseline sample (1,807 name-days): A +0.1753, L=21 p **0.0100** — still significant there.
+*(Erratum 2026-08-30: this read 0.0105, which is the L=42 column. The committed script deterministically prints 0.0100 at L=21. The coded anchor gate checks IC only, so no run was affected.)*
+
+Null spread, variant A: sd 0.0387 at L=1 → **0.1042 at L=21**. The published null was **2.7× too
+narrow** on the event-free sample, 3.0× on the baseline.
+
+### Verdict — WEAK, per the table registered before the run
+
+> 0.05 < p ≤ 0.20 → **may not be called significant anywhere; reported as suggestive, with both
+> p-values shown.**
+
+**+0.1561 stands as a measurement. Its significance does not.** The two corrections agree without
+being related: Newey–West t 1.69 and block-permutation p 0.0660 both put it just outside
+conventional significance, which is the finding.
+
+The control behaved (p 0.7626), so the null is readable.
+
+### What this changes
+
+- The **p 0.0010 figure is withdrawn.** It was an artifact of a null too narrow by ~3×.
+- +0.1561 may be shown as suggestive with both p's, never as significant.
+- The baseline p 0.0100 survives, but the baseline includes name-days whose forward window contains
+  an earnings announcement — the sample the event-free arm exists to exclude.
+- **Nothing here rescues a backtest number.** Cost is still uncharged.
+
+
+---
+
+## 2026-08-27 — the cost bound: the edge is gone before cost is charged
+
+**Registration:** `docs/2026-08-27-cost-breakeven-registration.md`, committed at `eb86625` before
+the run. Proposed by Solo. **Script:** `scripts/cost_breakeven.py`.
+
+Bound the cost rather than estimate it, because the estimate may not be buildable: no historical
+option quotes, name identity dominates the spread, best bar proxy +0.036 cross-name.
+
+### Measured round-trip cost, as a share of NET CREDIT
+
+Crossing twice at the 82% of half-spread a marketable order actually paid, scaled by what a vertical
+costs against its credit rather than against mid (9.7% SPY / 34% AMD, from the two test orders):
+
+| SPY | TSLA | NVDA | AAPL | MSFT | AMZN | AMD | META | INTC | GOOGL | MU |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 7.7% | 12.2% | 13.0% | 24.1% | 25.7% | 27.3% | 28.9% | 38.0% | 41.1% | 41.6% | 44.8% |
+
+**Erratum 2026-08-30.** This table read 15.3%–89.7%, exactly **2.00× too high**. The 9.7% (SPY) and
+34% (AMD) calibrators are taken from complete round trips — both legs, both ways — and the code then
+multiplied by two again. Found by review, not by us. The verdict is re-derived below and stands.
+
+### Result — DOES NOT SURVIVE
+
+Event-free, N=10: gross edge **−8.36%** of premium, measured cost **27.7%**, ratio **−0.30×**.
+**No name clears 2×. The best is SPY at 0.55×.** *(Corrected for the 2.00× erratum above; the
+figures first published were −0.15× and 0.29×.)*
+
+### The registered statistic was the wrong one, and it does not change the verdict
+
+The mean of `(IV−RV_fwd)/IV` is unbounded below, capped at +1 above, and explodes when `IV_t` is
+small. Median **+2.72%** against a mean of −8.36%; minimum **−1732%**; the worst 5% average −237%.
+A vertical caps loss at `width − credit` and cannot lose 1732% of its credit.
+
+Flooring the loss: **−0.33%** at −100% of premium, **−1.89%** at −400% of credit.
+
+**Under every flooring the gross edge is negative or indistinguishable from zero *before any cost is
+charged*.** Cost is not the binding constraint, so trading only the tight names does not rescue it.
+
+This also explains why the rank IC and this bound disagree without contradicting: rank IC is
+invariant to the tail, and any mean-based statistic on the same outcome is dominated by it. They
+were never measuring compatible quantities.
+
+### Combined with the same day's null correction
+
+- The IC is **WEAK** (p 0.0660, corrected null) — the ranking is suggestive, not significant.
+- The **gross edge on the names it selects is ≈0 or negative before cost.**
+
+**No backtest number is quotable, and the cost model is no longer the thing blocking it.** A
+mean-based edge on this outcome needs its own registration with the structural cap specified before
+any figure from it is quoted.
+
+
+---
+
+## 2026-08-27 — the signal does not replicate out-of-sample. WITHDRAWN.
+
+**Registration:** `docs/2026-08-27-extended-ic-registration.md`, committed at `96c85ca` before the
+run, anchor corrected at `7ce4f4e`. **Script:** `scripts/extended_ic.py`.
+
+Every prior IC test used 249 sessions (~11 independent windows). The committed longer series has
+597, and is a strict superset — all 2,731 overlapping rows byte-identical.
+
+### Result
+
+| arm | name-days | sessions | IC | NW t(21) | p | null sd |
+|---|---:|---:|---:|---:|---:|---:|
+| **anchor** · original 2024-03 → 2025-02 | 1,807 | 165 | **+0.1753** | 2.45 | 0.0100 | 0.0736 |
+| **PRIMARY · A · out-of-sample 2025-03 → 2026-08** | **3,590** | **327** | **+0.0414** | **0.72** | **0.2184** | 0.0507 |
+| C · out-of-sample *(control)* | 3,590 | 327 | −0.1425 | −1.80 | 0.9915 | 0.0602 |
+| A · full series | 5,628 | 513 | +0.0931 | 2.04 | 0.0150 | 0.0411 |
+| A · event-free through 2025-06 | 1,852 | 256 | +0.1432 | 2.30 | 0.0415 | 0.0814 |
+
+The anchor reproduces the prior run exactly, so the panel is the same one.
+
+### Verdict — NO EVIDENCE, per the table registered before the run
+
+> p > 0.20 → **withdrawn. Signal work stops.**
+
+**+0.1753 → +0.0414 on 327 sessions no test had touched.** Newey–West t 0.72. The control validates
+the null at p 0.9915.
+
+The full-series arm reads p 0.0150, but it *contains* the original window and is not independent
+evidence. The event-free arm is likewise almost entirely the original period, since earnings data
+stops 2025-06-25.
+
+### What this settles
+
+**The IV-percentile ranking does not replicate.** The original result was 11 independent windows,
+and 15 fresh ones do not reproduce it. Combined with the same day's other two runs:
+
+| | |
+|---|---|
+| significance on the original sample | WEAK (p 0.0660, corrected null) |
+| **replication out-of-sample** | **NO EVIDENCE (p 0.2184)** |
+| gross edge before cost | unresolved; the registered statistic priced the wrong structure |
+
+**No signal claim survives.** Nothing in the deck, video or repo may assert predictive skill.
+
+### The one thing that did not collapse
+
+Raw IV level, the control, is **consistently harmful** and gets more so out-of-sample: −0.1055 →
+−0.1425, t −1.80. Ranking each name against its own history stays above ranking on absolute IV in
+every arm. **That gap has never been tested as a paired comparison** and is not a claim — but it is
+the only structure in the data that persisted.
+
+### Anchor defect, recorded
+
+The first run halted on its own stop condition: the anchor returned +0.1839 on 2,038 name-days
+instead of +0.1753 on 1,807. The difference was exactly 21 sessions × 11 names — the final `H`
+sessions, unscoreable when the series ended in 2025-02 and scoreable on the longer one. Filtering
+the long series to the original dates is not the original sample. The anchor now also requires the
+forward window to close in-sample. **The primary result was printed before the stop condition was
+evaluated and had been seen, so the re-run is recorded as confirmatory rather than exploratory; the
+correction is adverse-neutral and the decision table never moved.**
+
+
+---
+
+## 2026-08-30 — review remediation: run 1's verdict changes to SURVIVES
+
+**Registration:** `docs/2026-08-30-review-remediation-registration.md`, committed at `657ed67`
+before the run. **Script:** `scripts/review_remediation.py`. Both probes come from the independent
+review at `.claude/private/2026-08-30-shelving-runs-review.md`.
+
+### Probe 1 — the null was dropping a third of the panel
+
+`block_name_perm` dropped a name-day whenever the permuted source name had no row that day. On run
+1's ragged event-free panel that is **29.3% of name-days per draw**, so the null was computed on a
+panel smaller and differently shaped than the observed one, and its spread was inflated.
+
+The fix draws one priority ordering per block and induces a permutation **on the names present each
+session** — a bijection on the observed set. Measured drop rate: **0.0%**.
+
+| null | p | sd |
+|---|---:|---:|
+| dropping *(as published)* | 0.0665 | 0.1059 |
+| **availability-preserving, mean of 10 seeds** | **0.0331** | ~0.085 |
+
+Range 0.0280–0.0410 across seeds, se 0.0014. Null means −0.0027 to +0.0026 — centred.
+
+**REGISTERED DECISION: run 1's verdict is corrected WEAK → SURVIVES, on the original sample only.**
+
+### This does not unshelve, and the registration said so before the run
+
+Run 3 is the load-bearing run: drop-free at 0.2%, 327 sessions no other run touched, **p 0.2184 at
+z 0.82**. Probe 1 speaks only to the original 249-session sample, which run 3 supersedes.
+
+**It makes the record cleaner, not weaker.** The corrected reading is:
+
+| | |
+|---|---|
+| original sample (165 sessions) | **+0.1561, p 0.0331 — significant** |
+| out-of-sample (327 sessions) | **+0.0414, p 0.2184 — nothing** |
+
+A signal that is significant in-sample and absent out-of-sample is the textbook signature of
+overfitting. That is a more informative finding than "weak in both", and it is what the shelving now
+rests on.
+
+### Probe 2 — A reverses against an IV-free outcome
+
+Claim 23, the review's single UNTESTED item. The registered outcome contains `IV_t` and signal A is
+a function of `IV_t`; arm C closes only the cross-name *level* channel.
+
+| arm | outcome | IC | NW t | p |
+|---|---|---:|---:|---:|
+| A · out-of-sample | registered `(IV−RV_fwd)/IV` | +0.0414 | 0.72 | 0.2129 |
+| A · out-of-sample | **`−RV_fwd`, IV-free** | **−0.1542** | −1.98 | 0.9935 |
+| C · out-of-sample | registered | −0.1425 | −1.80 | 0.9905 |
+| C · out-of-sample | `−RV_fwd`, IV-free | −0.8685 | −72.65 | 1.0000 |
+
+Registered reading: *reverses → the in-sample result was partly mechanical, and the shelving is
+strengthened.* That is the direction observed.
+
+**Caveat we are recording rather than glossing.** `−RV_fwd` is not scale-free, so ranking on it is
+dominated by permanent name-level volatility differences — C reads −0.8685 at t −72.65, which is a
+level effect, not a signal. The probe is directionally consistent with the registered reading, but
+the outcome carries a confound of its own and this is **not a clean settle** of claim 23. A proper
+version needs a scale-free IV-free outcome, which is not registered and has not been run.
+
+### Errata closed the same day
+
+- **D3.** Round-trip cost was overstated by exactly **2.00×** — the 9.7%/34% calibrators are already
+  complete round trips. Pooled 55.4% → **27.7%**, SPY 15.3% → **7.7%**. Verdict re-derived, stands.
+- **D1.** The validity check was upper-tail only and could not see a significantly negative arm. Now
+  two-sided, with the null mean reported. C is renamed a **comparison arm**: raw IV level carries
+  genuine negative association and was never association-free.
+- **D4.** Log's `0.0105` was the L=42 column; the committed script prints **0.0100** at L=21.

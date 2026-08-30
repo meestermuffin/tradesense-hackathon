@@ -28,3 +28,6 @@ logs/
 ui/node_modules/
 ui/.next/
 ui/next-env.d.ts
+
+# Scheduled-job stderr kept as evidence, but it is machine-local noise in a public repo.
+logs/archive/

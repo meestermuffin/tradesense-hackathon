@@ -3,6 +3,11 @@
 Options volatility-premium trading agent, built for the Alpaca AI Trading Agents Hackathon
 (28 Aug – 4 Sep 2026). **This repository is public and MIT-licensed.**
 
+**The trading signal is shelved.** The IV-percentile ranking does not replicate out-of-sample
+(+0.1753 → +0.0414, p 0.2184). Read `docs/2026-08-30-strategy-shelved.md` before writing anything
+that implies this repo has a predictive edge — it does not, and the scope of what is *and is not*
+shelved is set out there.
+
 ## Read first
 
 `.claude/private/PLAN.md` is the working plan — build tracks, dated timeline, decisions and their
@@ -91,9 +96,9 @@ registrations name that file and its commit as the definition of how the IV seri
 - **The universe is selection-biased** — 11 names chosen on 2026 liquidity, applied to 2024–25 data.
   Stated in `docs/measurement-log.md`; results computed on it are optimistic. `src/universe.py`
   enforces its own exclusions at import, so a name cannot be quietly re-admitted by an edit.
-- **No backtest number gets quoted** — deck, video or repo — until the cost model exists and is
-  written down. There is no historical option quote data to charge against, so cost must be
-  estimated. An uncosted result is the one figure a judge can take apart.
+- **No backtest number gets quoted** — deck, video or repo. The cost model was never the binding
+  constraint in the end: the signal itself does not replicate. Any number implying predictive skill
+  is now a false claim, not merely an uncosted one.
 - Check dependency licences before adding them. MIT compliance is a stated submission requirement.
 
 ## Conventions

@@ -124,13 +124,13 @@ def main():
                 **m,
                 bid=bid,
                 ask=ask,
-                bid_sz=q.get("bs"),
-                ask_sz=q.get("as"),
+                bid_sz=q.bid_size,
+                ask_sz=q.ask_size,
                 mid=round(mid, 4),
                 spread=round(ask - bid, 4),
                 spread_pct=round((ask - bid) / mid, 6),
                 moneyness=round(m["strike"] / m["spot"], 4),
-                quote_t=q.get("t"),
+                quote_t=q.timestamp,
             )
         )
     if not rows:

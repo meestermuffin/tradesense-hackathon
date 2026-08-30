@@ -54,6 +54,27 @@ LIMITS = RiskLimits(
     kill_switch_drawdown_pct=0.05,
 )
 
+# The condor ladder is a different book shape and gets its own registered limits rather than an
+# edit to LIMITS above. Two or three concentrated SPY positions, not ten names at one vertical each.
+#
+# Derivation, so the numbers are not free parameters:
+#   book 16% -- accepted knowingly. The downside here is a worse placement, not a real loss, and
+#     a 1.5% return does not distinguish the submission. Above what is right for real money.
+#   per position 6% -- the book split across two Monday tranches plus a Wednesday redeploy, so
+#     one tranche is a little under a third of the book.
+#   3 positions -- Sep 2 tranche, Sep 3 tranche, Wednesday redeploy into Sep 3.
+#   drawdown 8% on MARK, not realized. Nothing here closes before expiry, so a realized-loss
+#     switch would read zero through Monday and Tuesday.
+#   2 breaches -- fires while positions are open and does not depend on how the paper engine
+#     marks a multi-leg book, which is an open question.
+CONDOR_LIMITS = RiskLimits(
+    max_open_positions=3,
+    max_loss_per_position_pct=0.06,
+    max_total_defined_risk_pct=0.16,
+    kill_switch_drawdown_pct=0.08,
+    kill_switch_breaches=2,
+)
+
 MAX_OPEN_POSITIONS = LIMITS.max_open_positions
 MAX_LOSS_PER_POSITION_PCT = LIMITS.max_loss_per_position_pct
 MAX_TOTAL_DEFINED_RISK_PCT = LIMITS.max_total_defined_risk_pct

@@ -1,6 +1,20 @@
 # TODO
 
-Window opens **Fri 28 Aug**. Submission **Fri 4 Sep, 11:00 ET**.
+Hackathon window **Fri 28 Aug 09:30 ET → Fri 4 Sep 09:30 ET**. Submission **Fri 4 Sep 09:30 ET**.
+
+**P&L is measured over a shorter window than the hackathon runs**, quoted from the event page:
+
+> Official P&L measurement: Monday, August 31 at 9:30 a.m. ET to Friday, September 4 at 9:30 a.m.
+> ET. We will be looking at the portfolio's total equity as of EOD Thursday Sep 3rd. Any option
+> exercises and assignments for options expiring on Sep 3rd will be reflected in the EOD value.
+
+So the scored moment is **EOD Thursday 3 Sep**, not Friday. Positions expiring 3 Sep settle *into*
+the scored number. Fri 28 Aug sat inside the hackathon window but **outside P&L measurement** — the
+flat book that session cost nothing on the P&L criterion.
+
+**The signal is shelved** — see `docs/2026-08-30-strategy-shelved.md`. The submission is now an
+agent, a risk layer, and a measurement record that falsified its own hypothesis. Items below that
+assumed a working edge are struck.
 
 ---
 

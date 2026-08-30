@@ -38,8 +38,8 @@ status:  ## scheduler, wake schedule, account, and last session — the one-look
 	@echo "── account ──────────────────────────────────────"
 	@$(PY) -c "import sys;sys.path.insert(0,'.');from src.data.alpaca import AlpacaClient as A;\
 a=A();ac=a.account();p=a.positions();\
-print(f\"  {ac['account_number']}  equity \$${float(ac['equity']):,.2f}  open legs {len(p)}\");\
-print('  market open' if a.clock().get('is_open') else '  market closed')"
+print(f\"  {ac.account_number}  equity \$${ac.equity:,.2f}  open legs {len(p)}\");\
+print('  market open' if a.clock().is_open else '  market closed')"
 	@echo
 	@echo "── last session ─────────────────────────────────"
 	@$(PY) scripts/heartbeat.py || true

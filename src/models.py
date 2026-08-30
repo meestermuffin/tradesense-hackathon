@@ -258,12 +258,33 @@ class LiveIVReading(Domain):
 
 
 class RiskLimits(Domain):
-    """Per-position and portfolio caps. See `risk_profile` for what they do *not* cover."""
+    """Per-position and portfolio caps. See `risk_profile` for what they do *not* cover.
+
+    A book gets its own named instance rather than an edit to someone else's. Two competing
+    sources of truth for a limit is the failure this validates against.
+    """
 
     max_open_positions: int = Field(gt=0)
     max_loss_per_position_pct: float = Field(gt=0, lt=1)
     max_total_defined_risk_pct: float = Field(gt=0, lt=1)
     kill_switch_drawdown_pct: float = Field(gt=0, lt=1)
+    kill_switch_breaches: int | None = Field(None, gt=0)
+    """Breaches that halt opening.
+
+    A drawdown switch keyed on *realized* loss cannot fire in a book that closes nothing: with
+    every position held to expiry there is no realized loss until the first expiry, so the counter
+    reads zero through the half of the window it is supposed to govern. Breach count fires while
+    positions are still open, and does not depend on how the paper engine marks a multi-leg book.
+    """
+
+    @model_validator(mode="after")
+    def _position_cap_fits_the_book(self) -> RiskLimits:
+        if self.max_loss_per_position_pct > self.max_total_defined_risk_pct:
+            raise ValueError(
+                f"per-position cap {self.max_loss_per_position_pct:.1%} exceeds the book cap "
+                f"{self.max_total_defined_risk_pct:.1%} — one position could breach the book"
+            )
+        return self
 
 
 class PortfolioState(Domain):
