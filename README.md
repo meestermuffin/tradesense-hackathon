@@ -1,9 +1,18 @@
 # Options volatility-premium agent
 
-Sell defined-risk option premium where implied volatility is rich **relative to a name's own
-history** — not where it is high in absolute terms, which turns out to be mildly harmful.
+A defined-risk options agent, its risk layer, and the measurement record that **falsified its own
+trading signal**.
 
 Built for the Alpaca AI Trading Agents Hackathon, 28 Aug – 4 Sep 2026. MIT licensed.
+
+> **The signal this was built on is shelved.** Ranking names by where implied volatility sits
+> against their own history read rank IC +0.1753 on the sample it was developed on, and **+0.0414
+> (p 0.2184) on 327 sessions no test had touched.** It does not replicate. Full account, including
+> what is *not* shelved, in [`docs/2026-08-30-strategy-shelved.md`](docs/2026-08-30-strategy-shelved.md).
+>
+> **Nothing here claims predictive skill.** What is measured and stands: the risk profile, the
+> execution findings, the Alpaca behaviour, and a discipline that caught this before it shipped
+> rather than after.
 
 ---
 

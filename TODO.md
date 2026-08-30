@@ -2,6 +2,10 @@
 
 Window opens **Fri 28 Aug**. Submission **Fri 4 Sep, 11:00 ET**.
 
+**The signal is shelved** — see `docs/2026-08-30-strategy-shelved.md`. The submission is now an
+agent, a risk layer, and a measurement record that falsified its own hypothesis. Items below that
+assumed a working edge are struck.
+
 ---
 
 ## Mandatory — the submission fails without these
