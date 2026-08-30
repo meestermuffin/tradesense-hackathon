@@ -1,0 +1,89 @@
+{
+ "run_at": "2026-08-28T20:05:12.460813+00:00",
+ "account": "PA382RL5C7X8",
+ "host": "Jamies-MacBook-Pro.local",
+ "market_open": false,
+ "live": false,
+ "template": {
+  "structure": "put_credit",
+  "target_delta": 0.25,
+  "width": 5.0,
+  "max_width": 25.0,
+  "dte_min": 5,
+  "dte_max": 9,
+  "max_spread_pct": 0.08,
+  "delta_tolerance": 0.15
+ },
+ "decisions": [
+  {
+   "symbol": "META",
+   "outcome": "rejected",
+   "why": "no tradable strike on the protective side"
+  },
+  {
+   "symbol": "AAPL",
+   "outcome": "rejected",
+   "why": "no tradable strike on the protective side"
+  },
+  {
+   "symbol": "AMZN",
+   "outcome": "selected",
+   "contracts": 4,
+   "expiry": "2026-09-04",
+   "delta": -0.2479,
+   "credit_mid": 0.86,
+   "max_loss": 4.14
+  },
+  {
+   "symbol": "GOOGL",
+   "outcome": "rejected",
+   "why": "nearest delta 0.93 vs target 0.25; only 7/46 strikes passed quality, spanning delta 0.93-0.99"
+  },
+  {
+   "symbol": "NVDA",
+   "outcome": "selected",
+   "contracts": 4,
+   "expiry": "2026-09-04",
+   "delta": -0.2117,
+   "credit_mid": 0.665,
+   "max_loss": 4.335
+  },
+  {
+   "symbol": "SPY",
+   "outcome": "selected",
+   "contracts": 4,
+   "expiry": "2026-09-04",
+   "delta": -0.2433,
+   "credit_mid": 0.715,
+   "max_loss": 4.285
+  },
+  {
+   "symbol": "AMD",
+   "outcome": "selected",
+   "contracts": 1,
+   "expiry": "2026-09-04",
+   "delta": -0.277,
+   "credit_mid": 2.9,
+   "max_loss": 12.1
+  },
+  {
+   "symbol": "INTC",
+   "outcome": "rejected",
+   "why": "no tradable strike on the protective side"
+  },
+  {
+   "symbol": "MSFT",
+   "outcome": "rejected",
+   "why": "no tradable strike on the protective side"
+  },
+  {
+   "symbol": "MU",
+   "outcome": "selected",
+   "contracts": 2,
+   "expiry": "2026-09-04",
+   "delta": -0.2671,
+   "credit_mid": 2.405,
+   "max_loss": 7.595
+  }
+ ]
+}
