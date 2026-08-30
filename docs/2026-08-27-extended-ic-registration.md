@@ -41,7 +41,8 @@ scheduled-event detector. This is registered as a limitation, not resolved.
 |---|---|
 | **primary** | **A · baseline · out-of-sample window 2025-03-01 → 2026-08-25** — the sessions no test has touched |
 | secondary | A · baseline · full series 2024-03 → 2026-08 |
-| anchor | A · baseline · original window, which must reproduce IC +0.1753 and p 0.0105 |
+| anchor | A · baseline · original window, which must reproduce IC +0.1753 and p 0.0100 |
+*(Erratum 2026-08-30: registered as 0.0105, the L=42 column. The coded gate checks IC only.)*
 | reported, not decision-bearing | event-free arm where earnings data exists (through 2025-06); variant B, already known confounded |
 | **control** | **C · raw IV level, on every arm** |
 | null | block-constant name permutation, **L=21**, 2,000 draws, **seed 20260827** — identical to the corrected null |

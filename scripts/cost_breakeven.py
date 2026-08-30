@@ -44,10 +44,11 @@ SPREAD_PCT = dict(
     GOOGL=5.21,
     MU=5.61,
 )
-# Measured: a marketable order paid 82% of the half-spread. Round trip crosses twice.
+# Measured: a marketable order paid 82% of the half-spread.
 MARKETABLE_FRACTION = 0.82
-# Two legs crossed both ways, against a credit smaller than either leg. From the two test orders:
-# SPY 0.06 cost / 0.62 credit = 9.7%; AMD 0.63 / 1.85 = 34%. Ratio of credit-cost to mid-spread:
+# Two legs crossed BOTH WAYS, against a credit smaller than either leg. From the two test orders:
+# SPY 0.06 cost / 0.62 credit = 9.7%; AMD 0.63 / 1.85 = 34%. These are COMPLETE ROUND TRIPS
+# already -- do not multiply by 2 again. Ratio of credit-cost to mid-spread:
 VERTICAL_MULTIPLIER = {"SPY": 9.7 / 0.96, "AMD": 34.0 / 3.62}
 
 
@@ -74,12 +75,15 @@ def main():
     earn = json.load(open(J.EARN))
     contaminated = J.forward_contaminated(per, earn)
 
-    rt_mid = {s: v * MARKETABLE_FRACTION * 2 for s, v in SPREAD_PCT.items()}
+    # ERRATUM 2026-08-30: this carried a `* 2` for the round trip. The 9.7% / 34% calibrators
+    # below are already both-legs-both-ways -- they come from complete round trips -- so the
+    # multiplier re-applied it and every cost figure was overstated by exactly 2.00x.
+    rt_mid = {s: v * MARKETABLE_FRACTION for s, v in SPREAD_PCT.items()}
     mult = statistics.mean(VERTICAL_MULTIPLIER.values())
     rt_credit = {s: v * mult for s, v in rt_mid.items()}
 
     print("Round-trip cost, measured, as a share of premium")
-    print(f"  crossing twice at {MARKETABLE_FRACTION:.0%} of the half-spread, and a vertical")
+    print(f"  at {MARKETABLE_FRACTION:.0%} of the half-spread, and a vertical")
     print(f"  multiplier of {mult:.1f}x from the two test orders (cost vs NET CREDIT).\n")
     print(f"  {'name':6} {'spread %mid':>12} {'rt %mid':>9} {'rt %credit':>11}")
     for s in sorted(SPREAD_PCT, key=lambda x: SPREAD_PCT[x]):

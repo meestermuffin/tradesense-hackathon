@@ -26,10 +26,15 @@ including the row where Newey–West had fallen to **1.69**. Two statistics on t
 disagreeing by two orders of magnitude, and nobody reconciled them.
 
 **2 · The cost bound.** `docs/2026-08-27-cost-breakeven-registration.md`, registered `eb86625`.
-Gross edge **−8.36%** of premium against a measured round-trip of 55.4% of net credit. That
-statistic was then found to price a *naked short* rather than the defined-risk vertical actually
-traded, so it is **not** decisive on its own — but under every correct flooring the gross edge was
-still negative or indistinguishable from zero **before any cost was charged**.
+Gross edge **−8.36%** of premium against a measured round-trip of **27.7%** of net credit *(the
+figure first published, 55.4%, was 2.00× too high — erratum in the log)*. That statistic was then
+found to price a *naked short* rather than the defined-risk vertical actually traded, so it is
+**not** decisive on its own.
+
+Correctly floored, the honest statement is **no detectable gross edge, with a 95% Newey–West
+interval of roughly ±10% of premium** — not "the edge is gone". The interval's favourable edge
+reaches 0.32× the corrected pooled cost and never approaches the registered 2× bar, so the verdict
+holds; but it is an interval, not a point.
 
 **3 · It does not replicate.** `docs/2026-08-27-extended-ic-registration.md`, registered `96c85ca`.
 Every prior test had used 249 of the 597 sessions committed in `data/`. On the **327 sessions no
@@ -42,6 +47,29 @@ test had touched**:
 
 The anchor reproduces the prior run to four decimals, so this is the same measurement on more data.
 The original result rested on ~11 independent windows; 15 fresh ones do not reproduce it.
+
+## What this rests on — reviewed 2026-08-30
+
+An independent review recomputed all three runs (`.claude/private/2026-08-30-shelving-runs-review.md`,
+`13 VERIFIED · 2 DERIVED · 2 PLAUSIBLE · 1 UNTESTED · 6 REFUTED`). All three reproduce bit-for-bit
+and every registration precedes its results in git. It found four defects, three of which we had not
+recorded, and they change how much weight each run carries:
+
+- **The shelving rests principally on run 3.** It is the only one of the three with no defect found.
+- **Run 1 is boundary-indeterminate.** Its permutation null drops **25.2% of name-days per draw** on
+  the ragged event-free panel, inflating the null spread by ~10–13%. Drop-corrected, p ≈
+  **0.046–0.049** against a reported 0.0660 — straddling the registered 0.05 threshold. **Run 1's
+  WEAK could as easily have read SURVIVES**, and "the published null was 2.7× too narrow" is
+  honestly ~2.4×. Run 3 is untouched by this: 0.2% drops.
+- **Run 2 is an interval, not a point** — see above.
+- **Arm C is not a null-validity control.** Raw IV level carries genuine negative association, so it
+  was never association-free. Two-sided it *is* significant (p 0.0180 out-of-sample). What it
+  establishes is that the null is **centred**, which was verified directly (means −0.0028 / +0.0016 /
+  +0.0024 / −0.0004 across the decision arms). The earlier print, "the null is behaving", overclaimed.
+
+None of this revives the strategy. Reviving it would require run 3 to be wrong, and run 3 is the one
+run with nothing found against it — a drop-free null on that arm would have to read p ≤ 0.05 against
+a measured z of 0.82, which is effectively unreachable.
 
 ## What is shelved
 
@@ -58,8 +86,11 @@ anything.**
 
 Precision matters here; over-shelving discards work that is still sound.
 
-- **The variance risk premium as a market-wide effect.** Never tested here. Unconditional selling was
-  not the strategy and has no registered result either way.
+- **The variance risk premium as a market-wide effect.** No registered test either way. That is
+  strictly true, but it undersells what is already visible: the N=10 arm selects from an average of
+  **8.9 available names**, so it is close to unconditional, and its floored diagnostic reads roughly
+  **zero ± 10% of premium** — on a wrong-structure proxy, over a selection-biased universe. Not a
+  result. Not encouraging either.
 - **The defined-risk vertical as a structure.** It was a vehicle for the signal, never independently
   claimed. Its risk properties are measured and stand.
 - **Whether cost is payable.** Run 2's statistic was wrong for the structure. Genuinely unresolved.

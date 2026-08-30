@@ -127,9 +127,23 @@ def within_day(pan, rng):
 
 
 def p_from(actual, draws):
-    """One-sided, (hits + 1) / (n + 1). A p of exactly zero would overclaim the resolution."""
+    """UPPER-tail one-sided, (hits + 1) / (n + 1). Zero would overclaim the resolution."""
     hits = sum(1 for v in draws if v is not None and v >= actual)
     return (hits + 1) / (len(draws) + 1)
+
+
+def p_two_sided(actual, draws):
+    """Two-sided, for checks phrased as "must remain non-significant".
+
+    ERRATUM 2026-08-30: the validity check used the upper tail alone, which cannot see a
+    significantly NEGATIVE arm. Arm C reads -0.1425 out-of-sample at upper-tail p 0.9915 and
+    lower-tail p 0.0090 -- "non-significant" on the coded check, significant in fact. A check
+    written as unqualified non-significance has to be two-sided or it is not that check.
+    """
+    n = len([v for v in draws if v is not None])
+    up = p_from(actual, draws)
+    lo = (sum(1 for v in draws if v is not None and v <= actual) + 1) / (n + 1)
+    return min(1.0, 2 * min(up, lo))
 
 
 def run(label, per, excl, sessions):
@@ -150,13 +164,15 @@ def run(label, per, excl, sessions):
         actual, ics = mean_ic_from(pan)
         t = newey_west_t(ics, H)
 
-        pb, sd = {}, {}
+        pb, p2, sd, mean = {}, {}, {}, {}
         for L in BLOCK_LENGTHS:
             rng = random.Random(BLOCK_SEED)
             draws = [mean_ic_from(block_name_perm(pan, L, rng))[0] for _ in range(BLOCK_DRAWS)]
             draws = [d for d in draws if d is not None]
             pb[L] = p_from(actual, draws)
+            p2[L] = p_two_sided(actual, draws)
             sd[L] = statistics.stdev(draws)
+            mean[L] = statistics.mean(draws)
 
         # Reported only so the record carries why it is void. See the registration addendum.
         longest = max(len(r) for r in pan.values())
@@ -167,7 +183,7 @@ def run(label, per, excl, sessions):
             f"  {name:32} {actual:>+8.4f} {t:>6.2f} {pb[1]:>8.4f} {pb[21]:>8.4f} "
             f"{pb[42]:>8.4f} {p_sh:>8.4f}"
         )
-        results[key] = dict(ic=actual, t=t, p_blk=pb, sd=sd, p_shift=p_sh)
+        results[key] = dict(ic=actual, t=t, p_blk=pb, p2_blk=p2, sd=sd, mean=mean, p_shift=p_sh)
     a = results["A"]
     print(
         f"\n  null sd, variant A:  L=1 {a['sd'][1]:.4f}   L=21 {a['sd'][21]:.4f}   "
@@ -226,12 +242,20 @@ def main():
     )
 
     pc = ev["C"]["p_blk"][21]
-    print(f"\n  null validity check — control C under the same block null: p {pc:.4f}")
-    if pc <= 0.05:
-        print("  !! C IS SIGNIFICANT. The null has an artifact and NO arm above is")
-        print("     readable, including a favourable one. Registration says stop here.")
+    pc2 = ev["C"]["p2_blk"][21]
+    print(f"\n  arm C under the same block null: upper-tail p {pc:.4f}, TWO-SIDED p {pc2:.4f}")
+    print(
+        f"  null mean {ev['C']['mean'][21]:+.4f}, sd {ev['C']['sd'][21]:.4f} "
+        f"(a valid null centres at zero)"
+    )
+    print("  C is a COMPARISON ARM, not a null-validity control: raw IV level carries genuine")
+    print("  negative association, so it was never association-free. What it can show is that")
+    print("  the null is CENTRED; it cannot certify the null by being non-significant.")
+    if abs(ev["C"]["mean"][21]) > 0.02:
+        print("  !! THE NULL IS NOT CENTRED. That is the artifact that voided the shift")
+        print("     design. No arm above is readable, including a favourable one.")
         return 1
-    print("  C remains non-significant. The null is behaving.")
+    print("  Null is centred. That is what this check establishes -- no more.")
     return 0
 
 

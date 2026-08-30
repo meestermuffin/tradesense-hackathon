@@ -303,7 +303,8 @@ Variant A, event-free sample (1,145 name-days) — the row the book actually tra
 | B · IV ÷ trailing RV | +0.2563 | 3.38 | 0.0005 | 0.0145 | 0.0130 | ~~0.1694~~ |
 | C · raw IV level *(control)* | −0.0938 | −0.75 | 0.9940 | **0.7626** | 0.7556 | ~~0.0081~~ |
 
-Baseline sample (1,807 name-days): A +0.1753, L=21 p **0.0105** — still significant there.
+Baseline sample (1,807 name-days): A +0.1753, L=21 p **0.0100** — still significant there.
+*(Erratum 2026-08-30: this read 0.0105, which is the L=42 column. The committed script deterministically prints 0.0100 at L=21. The coded anchor gate checks IC only, so no run was affected.)*
 
 Null spread, variant A: sd 0.0387 at L=1 → **0.1042 at L=21**. The published null was **2.7× too
 narrow** on the event-free sample, 3.0× on the baseline.
@@ -323,7 +324,7 @@ The control behaved (p 0.7626), so the null is readable.
 
 - The **p 0.0010 figure is withdrawn.** It was an artifact of a null too narrow by ~3×.
 - +0.1561 may be shown as suggestive with both p's, never as significant.
-- The baseline p 0.0105 survives, but the baseline includes name-days whose forward window contains
+- The baseline p 0.0100 survives, but the baseline includes name-days whose forward window contains
   an earnings announcement — the sample the event-free arm exists to exclude.
 - **Nothing here rescues a backtest number.** Cost is still uncharged.
 
@@ -345,12 +346,17 @@ costs against its credit rather than against mid (9.7% SPY / 34% AMD, from the t
 
 | SPY | TSLA | NVDA | AAPL | MSFT | AMZN | AMD | META | INTC | GOOGL | MU |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 15.3% | 24.3% | 26.1% | 48.1% | 51.3% | 54.7% | 57.9% | 75.9% | 82.2% | 83.3% | 89.7% |
+| 7.7% | 12.2% | 13.0% | 24.1% | 25.7% | 27.3% | 28.9% | 38.0% | 41.1% | 41.6% | 44.8% |
+
+**Erratum 2026-08-30.** This table read 15.3%–89.7%, exactly **2.00× too high**. The 9.7% (SPY) and
+34% (AMD) calibrators are taken from complete round trips — both legs, both ways — and the code then
+multiplied by two again. Found by review, not by us. The verdict is re-derived below and stands.
 
 ### Result — DOES NOT SURVIVE
 
-Event-free, N=10: gross edge **−8.36%** of premium, measured cost **55.4%**, ratio **−0.15×**.
-**No name clears 2×. The best is SPY at 0.29×.**
+Event-free, N=10: gross edge **−8.36%** of premium, measured cost **27.7%**, ratio **−0.30×**.
+**No name clears 2×. The best is SPY at 0.55×.** *(Corrected for the 2.00× erratum above; the
+figures first published were −0.15× and 0.29×.)*
 
 ### The registered statistic was the wrong one, and it does not change the verdict
 
