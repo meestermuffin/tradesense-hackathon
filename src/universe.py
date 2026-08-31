@@ -60,9 +60,14 @@ LIMITS = RiskLimits(
 # Derivation, so the numbers are not free parameters:
 #   book 16% -- accepted knowingly. The downside here is a worse placement, not a real loss, and
 #     a 1.5% return does not distinguish the submission. Above what is right for real money.
-#   per position 6% -- the book split across two Monday tranches plus a Wednesday redeploy, so
-#     one tranche is a little under a third of the book.
-#   3 positions -- Sep 2 tranche, Sep 3 tranche, Wednesday redeploy into Sep 3.
+#   per position 6% -- the book split three ways, so one tranche is a little under a third.
+#   3 positions -- Mon -> Sep 2 (2 DTE), Mon -> Sep 3 (3 DTE), and a CONDITIONAL
+#     Tue -> Sep 3 (2 DTE) taken only if Monday's fill cleared near mid and Tuesday IV is calm.
+#     Updated 2026-08-30: the third slot was a Wednesday 1-DTE redeploy and was cut on gamma
+#     (net structure gamma 0.0822 at 1 DTE against 0.0438 at 2). Leaving the old derivation here
+#     would have left the registration describing a book that no longer exists.
+#     If the Tuesday condition fails the book runs at two positions and 12%, which the
+#     per-position cap enforces without any change here.
 #   drawdown 8% on MARK, not realized. Nothing here closes before expiry, so a realized-loss
 #     switch would read zero through Monday and Tuesday.
 #   2 breaches -- fires while positions are open and does not depend on how the paper engine
