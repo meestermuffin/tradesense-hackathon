@@ -280,3 +280,72 @@ def test_filled_legs_reach_the_journal_with_the_keys_it_indexes():
     for leg_ in r.sub.fills:
         assert leg_["symbol"] and leg_["signed_qty"] is not None
         assert leg_["side"] in ("buy", "sell"), "explicit side, never inferred"
+
+
+# ---- cancelling an unfilled order, and not hammering the API while waiting
+
+
+class CountingClient(FakeClient):
+    """Records every poll and every cancel, so the waiting behaviour itself can be asserted."""
+
+    def __init__(self, status="new", fill=None):
+        super().__init__(status=status, fill=fill)
+        self.polls = 0
+        self.cancelled: list[str] = []
+
+    def get_order(self, oid):
+        self.polls += 1
+        return Order(id=oid, status=self.status, filled_avg_price=self.fill)
+
+    def cancel_order(self, oid):
+        self.cancelled.append(oid)
+
+
+def test_an_unfilled_probe_is_cancelled_not_left_resting():
+    """The registration says cancelled at 20s, and a resting probe is not a cancelled one.
+
+    `docs/pending/condor-fill-realism.md`: "If the probe rests unfilled for 20 seconds it is
+    cancelled, not walked." Left resting, a probe that misses its window can still fill later --
+    into a book that by then holds the sized tranches, at a price nothing recorded, contaminating
+    both the measurement and the position.
+    """
+    c = CountingClient(status="new")
+    rec = submit(c, a_plan(), vetoes=[], poll_seconds=0.2, cancel_unfilled=True)
+    assert not rec.filled
+    assert c.cancelled == ["ord-1"], "an unfilled order must be cancelled"
+
+
+def test_a_filled_order_is_never_cancelled():
+    c = CountingClient(status="filled", fill=-1.24)
+    rec = submit(c, a_plan(), vetoes=[], poll_seconds=0.2, cancel_unfilled=True)
+    assert rec.filled
+    assert c.cancelled == []
+
+
+def test_the_tranche_path_still_leaves_its_order_resting():
+    """Default stays off. A tranche is not a probe -- it may legitimately fill after the poll."""
+    c = CountingClient(status="new")
+    submit(c, a_plan(), vetoes=[])
+    assert c.cancelled == []
+
+
+def test_waiting_does_not_busy_poll():
+    """The poll loop must sleep between checks.
+
+    Without a sleep this spins `get_order` as fast as the network allows for the whole poll
+    window -- hundreds of calls to learn one thing, on an endpoint that rate-limits.
+    """
+    c = CountingClient(status="new")
+    submit(c, a_plan(), vetoes=[], poll_seconds=1.0)
+    assert c.polls <= 12, f"{c.polls} polls in 1s is a busy loop"
+
+
+def test_a_cancel_that_fails_does_not_lose_the_record():
+    """The broker can refuse a cancel. The fill record still has to come back."""
+
+    class Refuses(CountingClient):
+        def cancel_order(self, oid):
+            raise RuntimeError("already pending cancel")
+
+    rec = submit(Refuses(status="new"), a_plan(), vetoes=[], poll_seconds=0.2, cancel_unfilled=True)
+    assert rec.ok and not rec.filled

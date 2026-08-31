@@ -152,6 +152,9 @@ class CondorPlan(BaseModel):
 # guardrail judges -- two copies drifting apart is how a tranche gets solved into a refusal.
 DELTA_BAND = (0.18, 0.22)
 
+# Seconds between order-status polls while waiting on a fill.
+POLL_INTERVAL = 0.25
+
 
 def _strike_on_skew(quotes, spot, dte, target, cp, rate, fallback_iv, band=None):
     """Pick a listed strike whose delta at ITS OWN implied vol satisfies the band, nearest target.
@@ -501,7 +504,8 @@ def submit(
     plan: CondorPlan,
     vetoes: list[Veto] | None = None,
     recorder=None,
-    poll_seconds: int = 20,
+    poll_seconds: float = 20,
+    cancel_unfilled: bool = False,
 ) -> CondorFill:
     """Place the condor, or refuse and say why.
 
@@ -516,6 +520,11 @@ def submit(
     When a markwatch `Recorder` is supplied the whole submission is wrapped so the NBBO on all four
     legs is captured **at submit time**. There is no historical options quote endpoint on this
     account, so a fill not captured in that moment is uninterpretable forever.
+
+    `cancel_unfilled` pulls the order if it has not filled by the deadline. The fill probe requires
+    it -- its registration specifies "cancelled, not walked" at 20s -- because a probe left resting
+    can fill later, into a book that by then holds the sized tranches, at a price nothing recorded.
+    It defaults off: a tranche is not a probe and may legitimately fill after the poll window.
     """
     import datetime as _dt
 
@@ -549,7 +558,7 @@ def submit(
     if recorder is None:
         if vetoes:
             return _refused()
-        return _place(client, plan, legs, poll_seconds)
+        return _place(client, plan, legs, poll_seconds, cancel_unfilled)
 
     with recorder.submission(
         kind="submit_condor",
@@ -563,7 +572,7 @@ def submit(
             sub.veto(v.rule, {"reason": v.reason})
         if sub.vetoed:
             return _refused()
-        rec = _place(client, plan, legs, poll_seconds)
+        rec = _place(client, plan, legs, poll_seconds, cancel_unfilled)
         order_row = sub.submitted(intended=intent, order_id=rec.order_id, status=rec.status)
         if rec.legs:
             sub.filled(
@@ -581,7 +590,13 @@ def submit(
         return rec
 
 
-def _place(client, plan: CondorPlan, legs: list[dict], poll_seconds: int) -> CondorFill:
+def _place(
+    client,
+    plan: CondorPlan,
+    legs: list[dict],
+    poll_seconds: float,
+    cancel_unfilled: bool = False,
+) -> CondorFill:
     """The order itself. Split out so the journalled and unjournalled paths cannot diverge."""
     import datetime as _dt
     import time
@@ -593,7 +608,23 @@ def _place(client, plan: CondorPlan, legs: list[dict], poll_seconds: int) -> Con
     state = order
     deadline = time.time() + poll_seconds
     while oid and not state.settled and time.time() < deadline:
+        # Sleep between polls. Without it this spins get_order as fast as the network allows --
+        # measured at 1.34M iterations per second against a fake, and a rate-limit against Alpaca.
+        time.sleep(min(POLL_INTERVAL, max(0.0, deadline - time.time())))
         state = client.get_order(oid)
+
+    if cancel_unfilled and oid and not state.settled:
+        # Best-effort. A broker may refuse (already pending cancel, or filled in the gap), and the
+        # record still has to come back -- losing it would lose the NBBO captured at submission.
+        try:
+            client.cancel_order(oid)
+        except Exception:
+            pass
+        else:
+            try:
+                state = client.get_order(oid)
+            except Exception:
+                pass
 
     from ..agent.adapter import fill_legs
 
