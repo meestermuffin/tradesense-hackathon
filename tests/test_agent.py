@@ -23,10 +23,14 @@ from src.agent.loop import (
     tuesday_gate,
 )
 from src.models import CondorFill
-from src.options.condor import BookState, Veto
+from src.options.condor import BookState
 
-MON, TUE, WED, THU = (dt.date(2026, 8, 31), dt.date(2026, 9, 1),
-                      dt.date(2026, 9, 2), dt.date(2026, 9, 3))
+MON, TUE, WED, THU = (
+    dt.date(2026, 8, 31),
+    dt.date(2026, 9, 1),
+    dt.date(2026, 9, 2),
+    dt.date(2026, 9, 3),
+)
 
 
 # ---- the ladder schedule
@@ -137,25 +141,43 @@ def test_book_state_is_built_from_broker_payloads():
 
 def test_open_positions_counts_spreads_not_legs():
     """Four legs is one condor. Counting legs would trip the position cap after one entry."""
-    legs = [{"symbol": f"SPY260902{cp}00{k}000", "qty": q, "asset_class": "us_option"}
-            for cp, k, q in (("P", "755", "14"), ("P", "760", "-14"),
-                             ("C", "772", "-14"), ("C", "777", "14"))]
-    st = book_state({"account_number": "X", "equity": "100000", "cash": "100000"},
-                    legs, high_water=100_000.0, open_defined_risk=0.0)
+    legs = [
+        {"symbol": f"SPY260902{cp}00{k}000", "qty": q, "asset_class": "us_option"}
+        for cp, k, q in (
+            ("P", "755", "14"),
+            ("P", "760", "-14"),
+            ("C", "772", "-14"),
+            ("C", "777", "14"),
+        )
+    ]
+    st = book_state(
+        {"account_number": "X", "equity": "100000", "cash": "100000"},
+        legs,
+        high_water=100_000.0,
+        open_defined_risk=0.0,
+    )
     assert st.open_positions == 1, f"4 legs is 1 condor, got {st.open_positions}"
 
 
 def test_equity_positions_are_ignored_when_counting_the_options_book():
     rows = [{"symbol": "AAPL", "qty": "10", "asset_class": "us_equity"}]
-    st = book_state({"account_number": "X", "equity": "100000", "cash": "100000"},
-                    rows, high_water=100_000.0, open_defined_risk=0.0)
+    st = book_state(
+        {"account_number": "X", "equity": "100000", "cash": "100000"},
+        rows,
+        high_water=100_000.0,
+        open_defined_risk=0.0,
+    )
     assert st.open_positions == 0
 
 
 def test_high_water_never_falls_below_current_equity():
     """Drawdown is measured against a running peak; a peak below spot would read negative."""
-    st = book_state({"account_number": "X", "equity": "105000", "cash": "100000"},
-                    [], high_water=100_000.0, open_defined_risk=0.0)
+    st = book_state(
+        {"account_number": "X", "equity": "105000", "cash": "100000"},
+        [],
+        high_water=100_000.0,
+        open_defined_risk=0.0,
+    )
     assert st.high_water >= st.equity
 
 
@@ -192,9 +214,14 @@ def test_a_dry_run_places_nothing():
 def test_vetoes_block_submission_and_are_returned():
     """A refusal is a first-class result the journal and the model can both read."""
     fill = CondorFill(
-        ok=False, error="[10_account] wrong book", underlying="SPY",
-        expiry=dt.date(2026, 9, 2), contracts=1, limit_price=-1.0,
-        credit_at_mid=1.0, submitted_at="2026-08-31T14:00:00Z",
+        ok=False,
+        error="[10_account] wrong book",
+        underlying="SPY",
+        expiry=dt.date(2026, 9, 2),
+        contracts=1,
+        limit_price=-1.0,
+        credit_at_mid=1.0,
+        submitted_at="2026-08-31T14:00:00Z",
         vetoes=["[10_account] wrong book"],
     )
     assert fill.ok is False and fill.vetoes
@@ -283,8 +310,11 @@ class _Client:
     trade_host = "https://paper-api.alpaca.markets"
 
     def __init__(self, account=None, positions=None, spot=766.0):
-        self._a = account or {"account_number": "PA3BUA9MX72C", "equity": "100000",
-                              "cash": "100000"}
+        self._a = account or {
+            "account_number": "PA3BUA9MX72C",
+            "equity": "100000",
+            "cash": "100000",
+        }
         self._p = positions or []
         self.spot = spot
         self.submitted = []
@@ -372,8 +402,9 @@ def test_live_mode_refuses_without_a_running_collector():
 
 def test_live_mode_proceeds_once_the_collector_is_declared_running():
     c = _Client()
-    loop = AgentLoop(client=c, dry_run=False, expected_account="PA3BUA9MX72C",
-                     collector_running=True)
+    loop = AgentLoop(
+        client=c, dry_run=False, expected_account="PA3BUA9MX72C", collector_running=True
+    )
     got = loop.tick(MON, high_water=100_000.0)
     assert len(got) == 2
 
@@ -416,8 +447,14 @@ def test_all_three_tranches_together_fit_the_registered_book():
     """The whole ladder, sized as the loop would size it, must not breach 16%."""
     loop = AgentLoop(client=_Client(), dry_run=True, expected_account="PA3BUA9MX72C")
     mon = loop.tick(MON, high_water=100_000.0, quotes=_chain(), spot=766.0)
-    tue = loop.tick(TUE, high_water=100_000.0, fill_vs_mid=-0.01, live_iv=0.13,
-                    quotes=_chain(expiry=dt.date(2026, 9, 3)), spot=766.0)
+    tue = loop.tick(
+        TUE,
+        high_water=100_000.0,
+        fill_vs_mid=-0.01,
+        live_iv=0.13,
+        quotes=_chain(expiry=dt.date(2026, 9, 3)),
+        spot=766.0,
+    )
     total = sum(d.plan.defined_risk for d in mon + tue if d.plan)
     assert total <= 100_000 * loop.limits.max_total_defined_risk_pct
 
@@ -431,6 +468,118 @@ def _chain(expiry=None, spot=766.0, iv=0.127):
     out = {}
     for k in range(int(spot) - 40, int(spot) + 40):
         p, c = price(spot, k, T, 0.04, iv, "P"), price(spot, k, T, 0.04, iv, "C")
-        out[float(k)] = (Quote(bp=max(0.01, p * 0.99), ap=p * 1.01 + 0.01),
-                         Quote(bp=max(0.01, c * 0.99), ap=c * 1.01 + 0.01))
+        out[float(k)] = (
+            Quote(bp=max(0.01, p * 0.99), ap=p * 1.01 + 0.01),
+            Quote(bp=max(0.01, c * 0.99), ap=c * 1.01 + 0.01),
+        )
     return out
+
+
+# ---- the model hook
+
+
+def _approve(delta=None, reason="looks fine"):
+    from src.agent.model import ModelDecision
+
+    return lambda ctx: ModelDecision(decision="approve", short_delta=delta, reason=reason)
+
+
+def _refuse(reason="not today"):
+    from src.agent.model import ModelDecision
+
+    return lambda ctx: ModelDecision(decision="refuse", reason=reason)
+
+
+def test_without_a_reviewer_behaviour_is_exactly_as_before():
+    """The model is additive. Its absence must change nothing."""
+    loop = AgentLoop(client=_Client(), dry_run=True, expected_account="PA3BUA9MX72C")
+    assert len(loop.tick(MON, high_water=100_000.0, quotes=_chain(), spot=766.0)) == 2
+
+
+def test_a_model_refusal_blocks_the_trade_and_keeps_its_reason():
+    loop = AgentLoop(
+        client=_Client(),
+        dry_run=True,
+        expected_account="PA3BUA9MX72C",
+        reviewer=_refuse("ADP prints into this expiry"),
+    )
+    got = loop.tick(MON, high_water=100_000.0, quotes=_chain(), spot=766.0)
+    assert all(d.skipped for d in got)
+    assert all(d.plan is None for d in got)
+    assert "ADP" in got[0].reason
+
+
+def test_a_model_approval_still_runs_the_guardrails():
+    """Approving is not sufficient. The wrong account must still veto."""
+    c = _Client(account={"account_number": "WRONG", "equity": "100000", "cash": "100000"})
+    loop = AgentLoop(client=c, dry_run=True, expected_account="PA3BUA9MX72C", reviewer=_approve())
+    got = loop.tick(MON, high_water=100_000.0, quotes=_chain(), spot=766.0)
+    assert all(any("10_account" in v for v in d.vetoes) for d in got)
+
+
+def test_a_tightened_delta_rebuilds_the_plan_at_that_delta():
+    loop = AgentLoop(
+        client=_Client(),
+        dry_run=True,
+        expected_account="PA3BUA9MX72C",
+        reviewer=_approve(delta=0.18),
+    )
+    got = loop.tick(MON, high_water=100_000.0, quotes=_chain(), spot=766.0)
+    for d in got:
+        if d.plan:
+            assert d.plan.requested_delta == 0.18
+
+
+def test_an_approval_without_a_delta_keeps_the_default():
+    loop = AgentLoop(
+        client=_Client(),
+        dry_run=True,
+        expected_account="PA3BUA9MX72C",
+        reviewer=_approve(delta=None),
+    )
+    for d in loop.tick(MON, high_water=100_000.0, quotes=_chain(), spot=766.0):
+        if d.plan:
+            assert d.plan.requested_delta == 0.20
+
+
+def test_a_reviewer_that_raises_does_not_become_an_approval():
+    """Fail closed. A crashed reviewer is a refusal, never assent by omission."""
+
+    def boom(ctx):
+        raise RuntimeError("reviewer died")
+
+    loop = AgentLoop(client=_Client(), dry_run=True, expected_account="PA3BUA9MX72C", reviewer=boom)
+    got = loop.tick(MON, high_water=100_000.0, quotes=_chain(), spot=766.0)
+    assert all(d.skipped for d in got)
+    assert "reviewer died" in got[0].reason or "refus" in got[0].reason.lower()
+
+
+def test_the_reviewer_is_given_the_numbers_it_needs_to_judge():
+    seen = {}
+
+    def spy(ctx):
+        seen.update(ctx)
+        from src.agent.model import ModelDecision
+
+        return ModelDecision(decision="approve", reason="ok")
+
+    AgentLoop(client=_Client(), dry_run=True, expected_account="PA3BUA9MX72C", reviewer=spy).tick(
+        MON, high_water=100_000.0, quotes=_chain(), spot=766.0
+    )
+    for k in ("underlying", "expiry", "credit", "contracts", "defined_risk", "spot", "iv"):
+        assert k in seen, f"reviewer context is missing {k}"
+
+
+def test_the_reviewer_is_never_given_a_price_to_set():
+    seen = {}
+
+    def spy(ctx):
+        seen.update(ctx)
+        from src.agent.model import ModelDecision
+
+        return ModelDecision(decision="approve", reason="ok")
+
+    AgentLoop(client=_Client(), dry_run=True, expected_account="PA3BUA9MX72C", reviewer=spy).tick(
+        MON, high_water=100_000.0, quotes=_chain(), spot=766.0
+    )
+    assert "limit_price" not in seen

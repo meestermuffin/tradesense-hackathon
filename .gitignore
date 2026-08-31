@@ -31,3 +31,8 @@ ui/next-env.d.ts
 
 # Scheduled-job stderr kept as evidence, but it is machine-local noise in a public repo.
 logs/archive/
+
+# markwatch runtime state -- the journal is per-run, not source
+journal.db
+journal.db-*
+markwatch/preflight.db*

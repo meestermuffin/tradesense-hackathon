@@ -277,6 +277,7 @@ class AgentLoop:
         wing_width: float = 5.0,
         iv: float = 0.127,
         cash_floor: float = 35_000.0,
+        reviewer=None,
     ):
         from ..universe import CONDOR_LIMITS
 
@@ -290,6 +291,13 @@ class AgentLoop:
         self.wing_width = wing_width
         self.iv = iv
         self.cash_floor = cash_floor
+        self.reviewer = reviewer
+        """Optional callable taking a context dict and returning a `ModelDecision`.
+
+        Absent by default, and its absence changes nothing -- the model is additive. When present it
+        may refuse, or tighten the short delta inside the registered band, and nothing else. Its
+        approval is not sufficient: `validate()` still runs after it.
+        """
         # Planning figure for sizing only. The real credit comes from the chain at build time.
         self.iv_credit_guess = 1.25
 
@@ -355,12 +363,12 @@ class AgentLoop:
 
             use_iv = iv if iv is not None else self.iv
 
-            def _build(n, _spec=spec, _iv=use_iv):
+            def _build(n, _spec=spec, _iv=use_iv, _delta=None):
                 return build_plan(
                     CondorRequest(
                         underlying="SPY",
                         expiry=_spec.expiry,
-                        short_delta=self.short_delta,
+                        short_delta=_delta if _delta is not None else self.short_delta,
                         wing_width=self.wing_width,
                         contracts=n,
                         rationale=_spec.note,
@@ -379,10 +387,27 @@ class AgentLoop:
                 out.append(Decision(spec=spec, vetoes=[str(probe)], reason=probe.reason))
                 continue
 
-            built = _build(self._contracts(state, spec, probe.max_loss_per_contract))
+            n = self._contracts(state, spec, probe.max_loss_per_contract)
+            built = _build(n)
             if isinstance(built, Veto):
                 out.append(Decision(spec=spec, vetoes=[str(built)], reason=built.reason))
                 continue
+
+            # The model reviews a fully priced structure, and may refuse it or tighten the short
+            # delta. It never sees a price field, and its approval does not skip what follows.
+            if self.reviewer is not None:
+                verdict = self._review(built, state, spec)
+                if verdict.decision != "approve":
+                    out.append(Decision(spec=spec, skipped=True, reason=verdict.reason))
+                    continue
+                if verdict.short_delta is not None and verdict.short_delta != self.short_delta:
+                    tightened = _build(n, _delta=verdict.short_delta)
+                    if isinstance(tightened, Veto):
+                        out.append(
+                            Decision(spec=spec, vetoes=[str(tightened)], reason=tightened.reason)
+                        )
+                        continue
+                    built = tightened
 
             vetoes = validate(
                 built,
@@ -397,6 +422,44 @@ class AgentLoop:
             out.append(Decision(spec=spec, plan=built, vetoes=[str(v) for v in vetoes]))
 
         return out
+
+    def _review(self, plan: CondorPlan, state: BookState, spec: TrancheSpec):
+        """Ask the reviewer, and fail closed if it misbehaves.
+
+        A reviewer that raises must never read as approval. The context deliberately carries no
+        price field to set -- only the numbers needed to judge whether to trade at all.
+        """
+        from .model import ModelDecision
+
+        ctx = {
+            "underlying": plan.underlying,
+            "expiry": plan.expiry.isoformat(),
+            "dte": plan.dte,
+            "session": spec.session.isoformat(),
+            "spot": plan.spot,
+            "iv": plan.iv,
+            "short_put": plan.short_put,
+            "short_call": plan.short_call,
+            "wing_width": plan.wing_width,
+            "credit": plan.credit,
+            "credit_pct_of_width": round(plan.credit_pct_of_width, 4),
+            "contracts": plan.contracts,
+            "defined_risk": plan.defined_risk,
+            "short_deltas": [round(plan.short_put_delta, 3), round(plan.short_call_delta, 3)],
+            "account_equity": state.equity,
+            "open_positions": state.open_positions,
+            "conditional_tranche": spec.conditional,
+            "note": spec.note,
+        }
+        try:
+            got = self.reviewer(ctx)
+        except Exception as e:
+            return ModelDecision(decision="refuse", reason=f"reviewer failed: {e}")
+        return (
+            got
+            if got is not None
+            else ModelDecision(decision="refuse", reason="reviewer returned nothing")
+        )
 
     def _contracts(self, state: BookState, spec: TrancheSpec, per_contract: float) -> int:
         """Contracts for this tranche, bounded by BOTH caps.

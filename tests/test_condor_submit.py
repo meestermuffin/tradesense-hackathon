@@ -175,7 +175,8 @@ def test_validate_and_submit_agree_on_a_clean_book():
 
 
 def test_price_improvement_reads_positive():
-    """Collecting more than mid is improvement. `fill` is a net price, so it compares on magnitude."""
+    """Collecting more than mid is improvement. `fill` is a net price, so it compares
+    on magnitude."""
     p = a_plan()
     got = submit(FakeClient(fill=-(p.credit + 0.10)), p)
     assert got.vs_mid == pytest.approx(0.10)
