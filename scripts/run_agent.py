@@ -180,6 +180,7 @@ def main():
             quotes=quotes,
             spot=spot,
             iv=iv,
+            only=spec,
         )
         d = next((x for x in decisions if x.spec.expiry == spec.expiry), None)
         if d is None:

@@ -317,6 +317,7 @@ class AgentLoop:
         quotes: dict | None = None,
         spot: float | None = None,
         iv: float | None = None,
+        only=None,
     ) -> list[Decision]:
         """One wake. Returns a Decision per tranche this session may open.
 
@@ -326,6 +327,12 @@ class AgentLoop:
         crossed. Refusing is the only safe answer, and it refuses loudly.
         """
         specs = tranches_for(session)
+        # `only` narrows to a single tranche. The caller fetches one expiry's chain at a time, so
+        # without it every call re-decided every tranche against the wrong quotes and discarded
+        # all but one -- n squared model calls, each of them billed. That is what left the 10:00
+        # job still running at 10:15 on 2026-08-31 with nothing placed.
+        if only is not None:
+            specs = [x for x in specs if x.expiry == only.expiry and x.session == only.session]
         if not specs:
             return []
 

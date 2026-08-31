@@ -1,0 +1,56 @@
+{
+  "OUT_OF_REGISTERED_WINDOW": "Registered for 09:45-10:00 ET; actually submitted 10:19:38 ET because the scheduled run was unarmed and the 10:00 job hung. Recorded here rather than in the registration, which stands as written. Later in the session means a different book than the one registered.",
+  "RECONSTRUCTED": "The probe filled and then crashed writing this file (AttributeError on a field CondorFill lacks). These values are read back from the broker order, not from the crashed run. credit_at_mid 1.12 is transcribed from the probe's own stdout at submission.",
+  "consequence": "run 4-leg as designed; record vs_mid as the cost estimate",
+  "credit_at_mid": 1.12,
+  "expiry": "2026-09-02",
+  "fill": -1.12,
+  "filled": true,
+  "iv": 0.1167,
+  "legs": [
+    {
+      "ask": null,
+      "bid": null,
+      "fill_price": 0.37,
+      "side": "buy",
+      "signed_qty": 1,
+      "symbol": "SPY260902P00755000"
+    },
+    {
+      "ask": null,
+      "bid": null,
+      "fill_price": 0.88,
+      "side": "sell",
+      "signed_qty": -1,
+      "symbol": "SPY260902P00760000"
+    },
+    {
+      "ask": null,
+      "bid": null,
+      "fill_price": 0.73,
+      "side": "sell",
+      "signed_qty": -1,
+      "symbol": "SPY260902C00771000"
+    },
+    {
+      "ask": null,
+      "bid": null,
+      "fill_price": 0.12,
+      "side": "buy",
+      "signed_qty": 1,
+      "symbol": "SPY260902C00776000"
+    }
+  ],
+  "limit_price": -1.12,
+  "n": 1,
+  "order_id": "72813fd1-2bec-42dc-9c57-7f6825d8ac3e",
+  "registration": "docs/pending/condor-fill-realism.md",
+  "seconds_to_settle": 0.04,
+  "session": "2026-08-31",
+  "spot": 765.77,
+  "status": "filled",
+  "verdict": "CONDORS",
+  "vs_mid": 0.0,
+  "why": "filled within 20s at vs_mid +0.000, at or above mid-0.05",
+  "written_at": "2026-08-31T14:20:40.150785+00:00"
+}
