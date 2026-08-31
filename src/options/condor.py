@@ -31,7 +31,7 @@ import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ..models import Quote
+from ..models import CondorFill, CondorLegFill, Quote
 from .structure import strike_at_delta, verify_delta_em_consistency
 
 CONTRACT_MULTIPLIER = 100
@@ -382,3 +382,151 @@ def validate(
         v.append(Veto(rule="01_sign", reason="limit price is not a credit"))
 
     return sorted(v, key=lambda x: x.rule)
+
+
+def build_legs(plan: CondorPlan) -> list[dict]:
+    """The four legs, shorts sold and wings bought.
+
+    Order matters only for readability; Alpaca does not care. What matters is that both wings are
+    bought: an mleg order must have every leg covered, and a naked short would be rejected.
+    """
+    from ..data.alpaca import leg
+
+    return [
+        leg(_occ(plan, plan.long_put, "P"), "buy", "buy_to_open"),
+        leg(_occ(plan, plan.short_put, "P"), "sell", "sell_to_open"),
+        leg(_occ(plan, plan.short_call, "C"), "sell", "sell_to_open"),
+        leg(_occ(plan, plan.long_call, "C"), "buy", "buy_to_open"),
+    ]
+
+
+def _occ(plan: CondorPlan, strike: float, cp: str) -> str:
+    """OCC symbol: root, YYMMDD, C/P, then the strike in thousandths, eight digits."""
+    return f"{plan.underlying}{plan.expiry:%y%m%d}{cp}{int(round(strike * 1000)):08d}"
+
+
+def submit(
+    client,
+    plan: CondorPlan,
+    vetoes: list[Veto] | None = None,
+    recorder=None,
+    poll_seconds: int = 20,
+) -> CondorFill:
+    """Place the condor, or refuse and say why.
+
+    `limit_price` is a **NET** price and negative means credit. `CondorPlan` refuses to construct
+    with a non-credit limit, so by the time a plan reaches here the sign is already guaranteed --
+    that is the point of putting the invariant on the type rather than in a check here.
+
+    `vetoes` are journalled and then honoured. Passing them in rather than re-running `validate()`
+    keeps one source of truth for what was checked, and means the journal records the same decision
+    the guardrails actually made.
+
+    When a markwatch `Recorder` is supplied the whole submission is wrapped so the NBBO on all four
+    legs is captured **at submit time**. There is no historical options quote endpoint on this
+    account, so a fill not captured in that moment is uninterpretable forever.
+    """
+    import datetime as _dt
+
+    legs = build_legs(plan)
+    symbols = [x["symbol"] for x in legs]
+    vetoes = list(vetoes or [])
+    inputs = {
+        "spot": plan.spot,
+        "iv": plan.iv,
+        "dte": plan.dte,
+        "credit_at_mid": plan.credit,
+        "credit_at_touch": plan.credit_at_touch,
+        "contracts": plan.contracts,
+        "defined_risk": plan.defined_risk,
+    }
+    intent = {"legs": legs, "net_limit": plan.limit_price}
+
+    def _refused() -> CondorFill:
+        return CondorFill(
+            ok=False,
+            error="; ".join(str(v) for v in vetoes),
+            underlying=plan.underlying,
+            expiry=plan.expiry,
+            contracts=plan.contracts,
+            limit_price=plan.limit_price,
+            credit_at_mid=plan.credit,
+            submitted_at=_dt.datetime.now(_dt.UTC).isoformat(),
+            vetoes=[str(v) for v in vetoes],
+        )
+
+    if recorder is None:
+        if vetoes:
+            return _refused()
+        return _place(client, plan, legs, poll_seconds)
+
+    with recorder.submission(
+        kind="submit_condor",
+        underlying=plan.underlying,
+        expiry=plan.expiry.isoformat(),
+        inputs=inputs,
+        intent=intent,
+        symbols=symbols,
+    ) as sub:
+        for v in vetoes:
+            sub.veto(v.rule, {"reason": v.reason})
+        if sub.vetoed:
+            return _refused()
+        rec = _place(client, plan, legs, poll_seconds)
+        order_row = sub.submitted(intended=intent, order_id=rec.order_id, status=rec.status)
+        if rec.legs:
+            sub.filled(
+                [
+                    {
+                        "symbol": x.symbol,
+                        "signed_qty": x.signed_qty,
+                        "fill_price": x.fill_price,
+                        "side": x.side,
+                    }
+                    for x in rec.legs
+                ]
+            )
+        _ = order_row
+        return rec
+
+
+def _place(client, plan: CondorPlan, legs: list[dict], poll_seconds: int) -> CondorFill:
+    """The order itself. Split out so the journalled and unjournalled paths cannot diverge."""
+    import datetime as _dt
+    import time
+
+    submitted_at = _dt.datetime.now(_dt.UTC).isoformat()
+    order = client.submit_mleg(legs, plan.contracts, plan.limit_price)
+
+    oid = order.id
+    state = order
+    deadline = time.time() + poll_seconds
+    while oid and not state.settled and time.time() < deadline:
+        state = client.get_order(oid)
+
+    from ..agent.adapter import fill_legs
+
+    filled_legs = [
+        CondorLegFill(
+            symbol=x["symbol"],
+            side=x["side"] or "",
+            signed_qty=x["signed_qty"],
+            fill_price=x["fill_price"],
+        )
+        for x in fill_legs(state, legs, plan.contracts)
+    ]
+    return CondorFill(
+        ok=True,
+        filled=state.status == "filled",
+        order_id=oid,
+        status=state.status,
+        underlying=plan.underlying,
+        expiry=plan.expiry,
+        contracts=plan.contracts,
+        limit_price=plan.limit_price,
+        credit_at_mid=plan.credit,
+        submitted_at=submitted_at,
+        filled_at=state.filled_at,
+        fill=state.filled_avg_price,
+        legs=filled_legs,
+    )

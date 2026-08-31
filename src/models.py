@@ -376,3 +376,47 @@ class FillRecord(Domain):
     legs: list[OrderLeg] = Field(default_factory=list)
     vs_mid: float | None = None
     vs_touch: float | None = None
+
+
+class CondorLegFill(Domain):
+    """One leg of a filled condor, with the NBBO it crossed."""
+
+    symbol: str
+    side: str
+    signed_qty: int
+    fill_price: float | None = None
+    bid: float | None = None
+    ask: float | None = None
+
+
+class CondorFill(Domain):
+    """A submitted condor and what happened to it.
+
+    `FillRecord` cannot carry this: its `NetQuote` has a `short` and a `long`, which is a vertical.
+    A condor crosses four legs and the per-leg prices are the thing worth keeping -- the fill probe
+    exists to find out whether all four clear at one limit, and an aggregate would hide the answer.
+    """
+
+    ok: bool
+    filled: bool = False
+    error: str | None = None
+    order_id: str | None = None
+    status: str | None = None
+    underlying: str
+    expiry: datetime.date
+    contracts: int
+    limit_price: float
+    credit_at_mid: float
+    submitted_at: str
+    filled_at: str | None = None
+    fill: float | None = None
+    legs: list[CondorLegFill] = Field(default_factory=list)
+    vetoes: list[str] = Field(default_factory=list)
+
+    @property
+    def vs_mid(self) -> float | None:
+        """Positive is price improvement: we collected more than the mid.
+
+        `fill` comes back as a net price, negative for a credit, so it is compared on magnitude.
+        """
+        return None if self.fill is None else round(abs(self.fill) - self.credit_at_mid, 4)
