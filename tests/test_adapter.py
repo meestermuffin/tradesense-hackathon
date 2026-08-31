@@ -53,7 +53,8 @@ def test_every_quote_request_sends_feed_indicative():
 
 
 def test_quotes_batch_at_forty_not_a_hundred():
-    """markwatch chunks at 100; this endpoint has failed here at large batches and 40 is known-good."""
+    """markwatch chunks at 100; this endpoint has failed here at large batches, and 40
+    is known-good."""
     syms = [f"S{i}" for i in range(95)]
     c = FakeClient(quotes=dict.fromkeys(syms, RAW))
     MarkwatchBridge(c).get_quotes(syms)

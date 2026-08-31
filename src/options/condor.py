@@ -148,7 +148,77 @@ class CondorPlan(BaseModel):
         return (self.credit - self.credit_at_touch) / self.credit if self.credit else 1.0
 
 
-def build_plan(req: CondorRequest, spot: float, iv: float, quotes, as_of=None, rate=0.04, grid=1.0):
+# The delta window guardrail 03 enforces. Shared so the strike solver targets the same window the
+# guardrail judges -- two copies drifting apart is how a tranche gets solved into a refusal.
+DELTA_BAND = (0.18, 0.22)
+
+
+def _strike_on_skew(quotes, spot, dte, target, cp, rate, fallback_iv, band=None):
+    """Pick a listed strike whose delta at ITS OWN implied vol satisfies the band, nearest target.
+
+    Solving against one flat ATM vol places strikes that then measure outside the band, because
+    equity put skew makes the OTM put richer and the OTM call cheaper than a single number says.
+    On 2026-08-31 at spot 769.28: flat 0.1343 reported the 763 put and 776 call both at ~0.197,
+    while their own quotes inverted to 0.1488 and 0.1201 -- true deltas 0.221 and 0.171.
+
+    Walking the listed strikes is used rather than bisection because IV varies strike by strike, so
+    there is no smooth function to invert -- and the chain is already in hand.
+
+    `band` is the delta window guardrail 03 will apply. Preference is ordinal: any strike inside it
+    outranks every strike outside, however much nearer the outsider sits to the target. Ranking on
+    the gap alone loses tranches to strike granularity -- on the 3 Sep chain the listed calls were
+    776C at 0.211 and 777C at 0.179, so any target under 0.195 picked the 0.179 and guardrail 03
+    then refused it by a thousandth, with an acceptable strike one point away. The band is passed
+    rather than assumed so the solver and the guardrail cannot drift apart.
+
+    The preference applies only when the target itself is inside the band. A request for a delta
+    the band forbids must stay forbidden: honouring it and letting guardrail 03 refuse is the point.
+    Snapping it to the nearest acceptable strike would launder a bad request into a passing one and
+    leave the guardrail with nothing to catch.
+
+    When no listed strike falls inside the band this returns the nearest anyway. The refusal that
+    follows is correct and is the guardrail's to make, not the solver's to pre-empt.
+
+    Returns `None` when nothing inverts, leaving the caller to fall back to the flat solve.
+    """
+    from .iv import greeks, implied_vol
+
+    T = max(dte, 1) / 365.0
+    idx = 0 if cp == "P" else 1
+    # Only steer toward the band when the caller is already asking for something it allows.
+    if band is not None and not (band[0] <= abs(target) <= band[1]):
+        band = None
+    best, best_gap = None, None
+    for strike, pair in quotes.items():
+        if cp == "P" and strike >= spot:
+            continue
+        if cp == "C" and strike <= spot:
+            continue
+        q = pair[idx]
+        if not q.two_sided:
+            continue
+        own = implied_vol(q.mid, spot, strike, T, rate, cp)
+        if not own:
+            continue
+        d = abs(greeks(spot, strike, T, rate, own, cp)["delta"])
+        gap = abs(d - abs(target))
+        # False sorts before True, so an in-band strike always outranks an out-of-band one.
+        rank = (band is not None and not (band[0] <= d <= band[1]), gap)
+        if best_gap is None or rank < best_gap:
+            best, best_gap = strike, rank
+    return best
+
+
+def build_plan(
+    req: CondorRequest,
+    spot: float,
+    iv: float,
+    quotes,
+    as_of=None,
+    rate=0.04,
+    grid=1.0,
+    band=DELTA_BAND,
+):
     """Resolve a request into a priced plan, or return a Veto explaining why not.
 
     `quotes` maps strike -> (put Quote, call Quote). The credit is taken from quote midpoints; the
@@ -159,8 +229,12 @@ def build_plan(req: CondorRequest, spot: float, iv: float, quotes, as_of=None, r
     if dte <= 0:
         return Veto(rule="expiry", reason=f"{req.expiry} is not in the future")
 
-    sp = strike_at_delta(spot, iv, dte, req.short_delta, "P", rate, grid)
-    sc = strike_at_delta(spot, iv, dte, req.short_delta, "C", rate, grid)
+    sp = _strike_on_skew(
+        quotes, spot, dte, req.short_delta, "P", rate, iv, band
+    ) or strike_at_delta(spot, iv, dte, req.short_delta, "P", rate, grid)
+    sc = _strike_on_skew(
+        quotes, spot, dte, req.short_delta, "C", rate, iv, band
+    ) or strike_at_delta(spot, iv, dte, req.short_delta, "C", rate, grid)
     lp, lc = sp - req.wing_width, sc + req.wing_width
 
     missing = [k for k in (lp, sp, sc, lc) if k not in quotes]
@@ -185,9 +259,26 @@ def build_plan(req: CondorRequest, spot: float, iv: float, quotes, as_of=None, r
         (quotes[sp][0].bid - quotes[lp][0].ask) + (quotes[sc][1].bid - quotes[lc][1].ask), 2
     )
 
-    from .iv import greeks
+    from .iv import greeks, implied_vol
 
     T = dte / 365.0
+
+    def _delta(strike, cp, side_idx):
+        """Delta at the strike's OWN implied vol, not a single flat ATM figure.
+
+        Found by the model reviewer on 2026-08-31 and verified: at spot 769.28, a flat 0.1343
+        reports the 763 put and 776 call both near 0.197, while their own quotes invert to 0.1488
+        and 0.1201 -- true deltas 0.221 and 0.171. Equity put skew is real, so a flat vol reports a
+        put that is richer and a call that is cheaper than the numbers say.
+
+        That matters because guardrail #3 checks these deltas. Computed flat, the band is satisfied
+        by a figure that does not describe the position. Falls back to the passed IV when a strike
+        will not invert.
+        """
+        q = quotes[strike][side_idx]
+        own = implied_vol(q.mid, spot, strike, T, rate, cp) if q.two_sided else None
+        return abs(greeks(spot, strike, T, rate, own or iv, cp)["delta"])
+
     try:
         return CondorPlan(
             underlying=req.underlying,
@@ -204,8 +295,8 @@ def build_plan(req: CondorRequest, spot: float, iv: float, quotes, as_of=None, r
             limit_price=-credit,
             spot=spot,
             iv=iv,
-            short_put_delta=abs(greeks(spot, sp, T, rate, iv, "P")["delta"]),
-            short_call_delta=abs(greeks(spot, sc, T, rate, iv, "C")["delta"]),
+            short_put_delta=_delta(sp, "P", 0),
+            short_call_delta=_delta(sc, "C", 1),
             requested_delta=req.short_delta,
         )
     except ValueError as e:
@@ -221,7 +312,7 @@ def validate(
     credit_floor=0.18,
     touch_floor=0.15,
     max_crossing_cost=0.25,
-    delta_band=(0.18, 0.22),
+    delta_band=DELTA_BAND,
     last_entry: datetime.date,
     max_expiry: datetime.date,
     cash_floor: float,

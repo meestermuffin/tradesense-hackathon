@@ -292,3 +292,133 @@ def test_two_tranches_and_a_redeploy_fit_the_registered_book():
     one = plan().defined_risk
     assert one * 3 <= 100_000 * CONDOR_LIMITS.max_total_defined_risk_pct
     assert one <= 100_000 * CONDOR_LIMITS.max_loss_per_position_pct
+
+
+# ---- skew: found by the model reviewer, 2026-08-31
+
+
+def skewed_chain(spot=766.0, atm=0.13, slope=0.0025):
+    """A chain with equity put skew: OTM puts richer, OTM calls cheaper."""
+    from src.models import Quote
+    from src.options.iv import price
+
+    T = (EXPIRY - TODAY).days / 365.0
+    out = {}
+    for k in range(int(spot) - 40, int(spot) + 40):
+        iv = atm + slope * (spot - k)  # rises below spot, falls above
+        iv = max(0.05, iv)
+        p, c = price(spot, k, T, RATE, iv, "P"), price(spot, k, T, RATE, iv, "C")
+        out[float(k)] = (
+            Quote(bp=max(0.01, p * 0.995), ap=p * 1.005 + 0.01),
+            Quote(bp=max(0.01, c * 0.995), ap=c * 1.005 + 0.01),
+        )
+    return out
+
+
+def test_reported_deltas_use_each_strikes_own_vol():
+    """The defect the model caught: a flat ATM vol reports deltas that do not describe the book.
+
+    Measured live at spot 769.28 — flat 0.1343 put the 763 put and 776 call both near 0.197, while
+    their own quotes inverted to 0.1488 and 0.1201, making the true deltas 0.221 and 0.171. The put
+    was outside the band and the call well below it, and guardrail #3 passed both.
+    """
+    p = build_plan(request(), SPOT, 0.13, skewed_chain(), as_of=TODAY, grid=1.0)
+    assert isinstance(p, CondorPlan)
+    # Under skew the two sides cannot both sit at the same delta if one flat vol were used.
+    assert p.short_put_delta != pytest.approx(p.short_call_delta, abs=1e-6)
+
+
+def test_strikes_are_solved_on_the_skew_surface_and_land_in_band():
+    """Solving flat and measuring on skew puts the strikes outside the band. Both must agree."""
+    p = build_plan(request(), SPOT, 0.13, skewed_chain(), as_of=TODAY, grid=1.0)
+    assert 0.15 <= p.short_put_delta <= 0.27
+    assert 0.15 <= p.short_call_delta <= 0.27
+
+
+def test_a_flat_chain_still_works():
+    """No skew is a valid market. The skew solve must not require skew to exist."""
+    p = build_plan(request(), SPOT, IV, chain(), as_of=TODAY, grid=1.0)
+    assert isinstance(p, CondorPlan)
+    assert p.short_put_delta > 0 and p.short_call_delta > 0
+
+
+def test_an_unquotable_chain_falls_back_to_the_flat_solve():
+    """When nothing inverts there is no surface to solve on; the flat path must still produce."""
+    from src.models import Quote
+
+    dead = {k: (Quote(bp=0.0, ap=0.0), Quote(bp=0.0, ap=0.0)) for k in chain()}
+    got = build_plan(request(), SPOT, IV, dead, as_of=TODAY, grid=1.0)
+    assert isinstance(got, Veto), "no two-sided quote anywhere is a refusal, not a crash"
+
+
+# ---- band-edge targets: found on the judged account, 2026-08-31 03:00
+
+
+def test_a_band_edge_target_still_lands_inside_the_band():
+    """The solver must satisfy the guardrail it will be judged by, not merely get close.
+
+    Found on the first dry run against the judged account. The model may tighten the short delta
+    anywhere inside [0.18, 0.22], and picking the strike with the smallest gap to that target is
+    not the same as picking one the band accepts. On the 3 Sep chain the listed calls bracketed
+    the target: 776C at 0.211 and 777C at 0.179. Any target below 0.195 makes 777C the nearer of
+    the two, so a tightening to 0.19 -- squarely inside the band and exactly what the model is
+    allowed to ask for -- selected a strike that guardrail 03 then refused by 0.001. The tranche
+    was lost to strike granularity, with an acceptable strike sitting one point away.
+    """
+    for target in (0.180, 0.185, 0.190, 0.195, 0.200, 0.215, 0.220):
+        p = build_plan(
+            request(short_delta=target), SPOT, 0.13, skewed_chain(), as_of=TODAY, grid=1.0
+        )
+        assert isinstance(p, CondorPlan), f"target {target}: {p}"
+        assert 0.18 <= p.short_put_delta <= 0.22, f"target {target}: put {p.short_put_delta:.3f}"
+        assert 0.18 <= p.short_call_delta <= 0.22, f"target {target}: call {p.short_call_delta:.3f}"
+
+
+def test_an_in_band_strike_beats_a_nearer_out_of_band_one():
+    """Preference is ordinal: any in-band strike outranks every out-of-band one, however near."""
+    from src.options.condor import _strike_on_skew
+
+    got = _strike_on_skew(
+        skewed_chain(),
+        SPOT,
+        dte=2,
+        target=0.18,
+        cp="C",
+        rate=RATE,
+        fallback_iv=0.13,
+        band=(0.18, 0.22),
+    )
+    assert got is not None
+    from src.options.iv import greeks, implied_vol
+
+    q = skewed_chain()[got][1]
+    own = implied_vol(q.mid, SPOT, got, 2 / 365.0, RATE, "C")
+    assert 0.18 <= abs(greeks(SPOT, got, 2 / 365.0, RATE, own, "C")["delta"]) <= 0.22
+
+
+def test_no_in_band_strike_falls_back_to_nearest():
+    """A chain too coarse to offer an in-band strike must still produce a plan, not vanish.
+
+    The guardrail refuses it afterwards; that refusal is the correct outcome and is not the
+    solver's to pre-empt.
+    """
+    from src.options.condor import _strike_on_skew
+
+    coarse = {k: v for k, v in skewed_chain().items() if int(k) % 25 == 0}
+    got = _strike_on_skew(
+        coarse, SPOT, dte=2, target=0.20, cp="C", rate=RATE, fallback_iv=0.13, band=(0.18, 0.22)
+    )
+    assert got is not None
+
+
+def test_the_solver_never_launders_an_out_of_band_request():
+    """Band preference must not rescue a request the band forbids.
+
+    Steering toward the band is for honouring a legitimate target that strike granularity would
+    otherwise push outside it. Applied to a target the band already rejects, the same steering
+    would silently return a compliant strike and leave guardrail 03 with nothing to fire on --
+    turning a refusal into a fill. The preference is therefore conditional on the target itself.
+    """
+    p = plan(short_delta=0.35)
+    v = validate(p, clean_book(), CONDOR_LIMITS, as_of=TODAY, **GATES)
+    assert any(x.rule == "03_delta" for x in v), "an out-of-band request must still be refused"
