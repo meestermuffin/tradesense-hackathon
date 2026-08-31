@@ -145,3 +145,28 @@ def test_a_corrupt_verdict_file_refuses(tmp_path, monkeypatch):
     monkeypatch.setattr(fp, "PROBE_DIR", str(tmp_path))
     (tmp_path / "2026-08-31-verdict.json").write_text("{ not json")
     assert not fp.gate(dt.date(2026, 8, 31))[0]
+
+
+def test_the_verdict_payload_only_reads_fields_that_exist():
+    """The probe filled and then crashed writing its own result.
+
+    `CondorFill` has `vs_mid` but no `vs_touch`, and the attribute error fired *after* the order
+    was live -- so the measurement existed at the broker and nowhere else. Every key written must
+    be reachable on the model.
+    """
+    import scripts.fill_probe as fp
+
+    r = rec(filled=True, status="filled", fill=-1.12, credit_at_mid=1.12, limit_price=-1.12)
+    payload_fields = (
+        "status",
+        "filled",
+        "fill",
+        "vs_mid",
+        "credit_at_mid",
+        "limit_price",
+        "order_id",
+        "legs",
+    )
+    for f in payload_fields:
+        getattr(r, f)
+    assert fp.verdict_for(r)[0] == fp.CONDORS

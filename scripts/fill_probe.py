@@ -217,7 +217,6 @@ def main() -> int:
         "filled": rec.filled,
         "fill": rec.fill,
         "vs_mid": rec.vs_mid,
-        "vs_touch": rec.vs_touch,
         "credit_at_mid": rec.credit_at_mid,
         "limit_price": rec.limit_price,
         "order_id": rec.order_id,

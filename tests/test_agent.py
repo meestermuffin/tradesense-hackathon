@@ -583,3 +583,59 @@ def test_the_reviewer_is_never_given_a_price_to_set():
         MON, high_water=100_000.0, quotes=_chain(), spot=766.0
     )
     assert "limit_price" not in seen
+
+
+# ---- one review per tranche, not one per tranche per tranche
+
+
+def test_tick_reviews_each_tranche_once():
+    """`run_agent` loops the specs and `tick` looped them again, so reviews went as n squared.
+
+    Found live on 2026-08-31: the scheduled 10:00 job was still running 15 minutes later, having
+    re-reviewed tranche 1 on every pass and discarding all but the matching Decision. Model calls
+    are billed and slow, so a quadratic count is both a cost bug and the reason the entry window
+    was missed entirely.
+    """
+    from src.agent.model import ModelDecision
+
+    calls = []
+
+    def counting_reviewer(ctx):
+        calls.append(ctx["expiry"])
+        return ModelDecision(decision="approve", reason="ok")
+
+    from tests.test_condor import chain
+
+    specs = tranches_for(MON)
+    assert len(specs) == 2, "this test is meaningless with one tranche"
+
+    for spec in specs:
+        AgentLoop(
+            client=_Client(),
+            dry_run=True,
+            expected_account="PA3BUA9MX72C",
+            reviewer=counting_reviewer,
+        ).tick(
+            MON,
+            high_water=100_000.0,
+            only=spec,
+            quotes=chain(expiry=spec.expiry, as_of=MON),
+            spot=766.0,
+            iv=0.127,
+        )
+
+    assert calls, "the reviewer was never reached; the fixture vetoed before review"
+    assert len(calls) == len(specs), f"{len(calls)} reviews for {len(specs)} tranches"
+
+
+def test_only_narrows_to_one_tranche():
+    loop = AgentLoop(client=_Client(), dry_run=True, expected_account="PA3BUA9MX72C")
+    spec = tranches_for(MON)[1]
+    got = loop.tick(MON, high_water=100_000.0, only=spec)
+    assert len(got) == 1 and got[0].spec.expiry == spec.expiry
+
+
+def test_omitting_only_still_decides_every_tranche():
+    """Default is unchanged: the existing callers pass no `only` and must keep working."""
+    loop = AgentLoop(client=_Client(), dry_run=True, expected_account="PA3BUA9MX72C")
+    assert len(loop.tick(MON, high_water=100_000.0)) == 2
