@@ -25,7 +25,9 @@ at roughly $0.10-0.22 per call.
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
 import subprocess
 from typing import Any, Literal
 
@@ -52,10 +54,44 @@ class ModelDecision(BaseModel):
     """True when the model asked for a delta outside the band and was pulled back into it."""
 
 
+FALLBACK_BINS = (
+    "/opt/homebrew/bin/claude",
+    "/usr/local/bin/claude",
+    os.path.expanduser("~/.local/bin/claude"),
+)
+"""Where the CLI actually lives when PATH does not say.
+
+A launchd job inherits almost no environment -- PATH is roughly /usr/bin:/bin -- so a bare
+`claude` is not found. That failure is silent in the worst way: ask() raises, review() fails
+closed, every tranche is refused, and the log says only that the model declined. Verified by
+running the installed plist under `env -i PATH=/usr/bin:/bin`.
+"""
+
+
+def claude_bin() -> str:
+    """Resolve the CLI, or raise saying how to fix it.
+
+    `CLAUDE_BIN` overrides everything, which is what the scheduled jobs set.
+    """
+    override = os.environ.get("CLAUDE_BIN")
+    if override:
+        return override
+    found = shutil.which("claude")
+    if found:
+        return found
+    for p in FALLBACK_BINS:
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    raise RuntimeError(
+        "claude CLI not found on PATH. A scheduled job inherits almost no environment; "
+        "set CLAUDE_BIN=/full/path/to/claude in the plist or the environment."
+    )
+
+
 def ask(prompt: str, timeout: float = TIMEOUT_S) -> str:
     """One headless call. Returns the raw envelope; parsing is the caller's problem."""
     r = subprocess.run(
-        ["claude", "-p", prompt, "--output-format", "json"],
+        [claude_bin(), "-p", prompt, "--output-format", "json"],
         capture_output=True,
         text=True,
         timeout=timeout,

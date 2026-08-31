@@ -43,6 +43,15 @@ P&L measured **Mon 09:30 → EOD Thu 3 Sep**. Submission **Fri 09:30**. Scored o
 
 ### Monday 31 Aug
 
+**Scheduled.** `make agent-schedule` installs the four dated launchd jobs (09:35 dry, 09:45 probe,
+10:00 tranches, Tue 09:35). Currently **installed but UNARMED** — no `--live`, nothing will place.
+To arm: `make agent-schedule LIVE=1 ACCOUNT=PA3BUA9MX72C`, which re-verifies the credentials
+resolve to that account before writing the plists. Remove with `make agent-unschedule`.
+
+**A closed laptop means no trade, not a late one.** launchd runs a missed job on wake, so every
+job passes `--at HH:MM` and refuses outside a ten-minute window. Keep the machine awake and
+plugged in.
+
 - [ ] 09:31 — re-probe options quote latency. Our measurement says real-time, the docs say 15-min
       delayed. A weekend run cannot settle it.
 - [ ] 09:35 — `run_agent.py` dry run on live spot and IV, eyeball the strikes.

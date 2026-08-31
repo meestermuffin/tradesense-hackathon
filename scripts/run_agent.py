@@ -37,45 +37,13 @@ from src.agent.adapter import MarkwatchBridge  # noqa: E402
 from src.agent.collector import CollectorHandle  # noqa: E402
 from src.agent.loop import AgentLoop, tranches_for  # noqa: E402
 from src.agent.model import review  # noqa: E402
+from src.agent.window import parse, within  # noqa: E402
 from src.data.alpaca import AlpacaClient  # noqa: E402
-from src.options.atm import atm_iv  # noqa: E402
+from src.options.chain import chain_quotes  # noqa: E402
 from src.options.condor import submit  # noqa: E402
 
-
-def chain_quotes(client, bridge, underlying, expiry, spot, span=40):
-    """Quotes by strike for `build_plan`, plus the raw quotes and the ATM vol for this expiry.
-
-    Returns `(by_strike, raw, iv)`. The raw dict is handed to `atm_iv` so the vol is inverted from
-    the same quotes the strikes are solved against — fetching twice would let them disagree.
-    """
-    from src.models import Quote
-
-    cs = client.option_contracts(
-        underlying,
-        expiration_date=expiry.isoformat(),
-        status="active",
-        strike_gte=spot - span,
-        strike_lte=spot + span,
-        limit=2000,
-    )
-    puts = {c.strike_price: c.symbol for c in cs if c.type == "put"}
-    calls = {c.strike_price: c.symbol for c in cs if c.type == "call"}
-    syms = list(puts.values()) + list(calls.values())
-    raw = bridge.get_quotes(syms)
-
-    def q(sym):
-        r = raw.get(sym)
-        if not r or r.get("bid") is None or r.get("ask") is None:
-            return None
-        return Quote(bp=r["bid"], ap=r["ask"])
-
-    out = {}
-    for k in sorted(set(puts) & set(calls)):
-        p, c = q(puts[k]), q(calls[k])
-        if p and c:
-            out[k] = (p, c)
-    iv = atm_iv(client, underlying, expiry, spot, raw)
-    return out, raw, iv
+sys.path.insert(0, os.path.join(REPO, "scripts"))
+from fill_probe import gate as probe_gate  # noqa: E402
 
 
 def main():
@@ -108,9 +76,26 @@ def main():
         help="override the Tuesday gate's IV; measured from the chain by default",
     )
     ap.add_argument("--high-water", type=float, default=100_000.0)
+    ap.add_argument(
+        "--at",
+        default=None,
+        help="HH:MM this run was scheduled for. Refuses if the wake arrived outside the window "
+        "-- launchd runs missed jobs on wake, and a late entry is a different trade.",
+    )
+    ap.add_argument(
+        "--skip-probe-gate",
+        action="store_true",
+        help="place without a probe verdict. Deliberate override; the reason is printed.",
+    )
     a = ap.parse_args()
 
     session = datetime.date.fromisoformat(a.session) if a.session else datetime.date.today()
+    if a.at:
+        ok, why = within(parse(a.at))
+        if not ok:
+            print(f"  REFUSED: {why}")
+            return 3
+        print(f"  window  {why}")
     specs = tranches_for(session)
     print(f"  session {session:%Y-%m-%d %A}   tranches scheduled: {len(specs)}")
     if not specs:
@@ -122,6 +107,20 @@ def main():
     acct = client.account()
     print(f"  account {acct.account_number}   equity ${acct.equity:,.2f}")
     print(f"  mode    {'LIVE — orders will be placed' if a.live else 'DRY RUN — no orders'}")
+
+    # The registered 09:45 probe decides condors vs paired verticals for the whole book, so sizing
+    # into an unread or failed probe is placing the order the probe existed to prevent. Fails
+    # closed: a missing verdict refuses, because a probe that crashed is indistinguishable from one
+    # that never ran. --skip-probe-gate is the deliberate human override.
+    if a.live:
+        ok, why = probe_gate(session)
+        if a.skip_probe_gate:
+            print(f"  probe   OVERRIDDEN — {why}")
+        elif not ok:
+            print(f"  REFUSED: {why}")
+            return 2
+        else:
+            print(f"  probe   {why}")
 
     # markwatch first, always. Quotes do not exist after the fact on this account, so the
     # collector has to be capturing before an order can exist -- otherwise the fill can never be

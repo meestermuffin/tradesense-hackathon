@@ -113,6 +113,12 @@ probe:  ## IV-series gate probe, stage 2, v2 selection
 schedule:  ## install the four agents. Arm with: make schedule LIVE=1 ACCOUNT=PA...
 	@LIVE=$(LIVE) ACCOUNT=$(ACCOUNT) bash scripts/install_schedule.sh
 
+agent-schedule:  ## install the condor agent's dated runs. Arm with: LIVE=1 ACCOUNT=PA...
+	@bash scripts/install_agent_schedule.sh
+
+agent-unschedule:  ## remove the condor agent's dated runs
+	@bash scripts/uninstall_agent_schedule.sh
+
 cleanup:  ## remove THIS project's four agents. Requires CONFIRM=yes
 	@echo "This removes only these four labels, by name — never by wildcard:"
 	@for n in capture cycle snapshot heartbeat; do echo "    com.tradesense.$$n"; done

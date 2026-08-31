@@ -176,3 +176,62 @@ def test_the_prompt_states_that_approval_is_not_sufficient():
 
     p = build_prompt({}).lower()
     assert "guardrail" in p or "still" in p
+
+
+# ---- finding the CLI under a scheduled job's environment
+
+
+def test_the_binary_is_found_on_a_normal_path(monkeypatch):
+    import src.agent.model as m
+
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    monkeypatch.setattr(m.shutil, "which", lambda n, path=None: "/somewhere/claude")
+    assert m.claude_bin() == "/somewhere/claude"
+
+
+def test_it_falls_back_to_known_install_locations(monkeypatch, tmp_path):
+    """launchd gives a job almost no PATH, so `claude` is not on it.
+
+    Found by running the installed plist under `env -i PATH=/usr/bin:/bin`: the CLI was not found,
+    ask() raised, review() failed closed, and every tranche was refused. The schedule would have
+    placed nothing at 10:00 and said only that the model declined.
+    """
+    import src.agent.model as m
+
+    fake = tmp_path / "claude"
+    fake.write_text("#!/bin/sh\n")
+    fake.chmod(0o755)
+    monkeypatch.setattr(m.shutil, "which", lambda n, path=None: None)
+    monkeypatch.setattr(m, "FALLBACK_BINS", (str(fake),))
+    assert m.claude_bin() == str(fake)
+
+
+def test_an_explicit_override_wins(monkeypatch, tmp_path):
+    import src.agent.model as m
+
+    fake = tmp_path / "mine"
+    fake.write_text("#!/bin/sh\n")
+    fake.chmod(0o755)
+    monkeypatch.setenv("CLAUDE_BIN", str(fake))
+    assert m.claude_bin() == str(fake)
+
+
+def test_a_missing_binary_raises_with_the_fix_in_the_message(monkeypatch):
+    """The refusal has to say what to do, or it reads as the model declining on the merits."""
+    import src.agent.model as m
+
+    monkeypatch.delenv("CLAUDE_BIN", raising=False)
+    monkeypatch.setattr(m.shutil, "which", lambda n, path=None: None)
+    monkeypatch.setattr(m, "FALLBACK_BINS", ())
+    with pytest.raises(RuntimeError, match="CLAUDE_BIN"):
+        m.claude_bin()
+
+
+def test_a_missing_binary_still_refuses_rather_than_approving(monkeypatch):
+    import src.agent.model as m
+
+    monkeypatch.delenv("CLAUDE_BIN", raising=False)
+    monkeypatch.setattr(m.shutil, "which", lambda n, path=None: None)
+    monkeypatch.setattr(m, "FALLBACK_BINS", ())
+    d = m.review({"underlying": "SPY", "expiry": "2026-09-02", "short_delta": 0.20})
+    assert d.decision == "refuse"

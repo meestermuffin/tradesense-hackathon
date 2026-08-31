@@ -30,12 +30,24 @@ addopts = "-q"
 line-length = 100
 target-version = "py313"
 
-# scripts/iv_series_probe.py is deliberately excluded from formatting.
-# Two committed pre-registrations name that file and its commit as the definition of how the IV
-# series was built. Reformatting it would leave the working copy differing from the file the
-# registrations describe, and anyone checking reproducibility would have to decide whether the
-# differences are cosmetic. Keeping it byte-identical costs nothing and removes that question.
-extend-exclude = ["scripts/iv_series_probe.py"]
+# Measurement scripts named by a committed registration are excluded from formatting.
+# A registration names a file and a commit as the definition of how a result was produced.
+# Reformatting one leaves the working copy differing from the file the registration describes, and
+# anyone checking reproducibility then has to decide for themselves whether the differences are
+# cosmetic. Keeping them byte-identical costs nothing and removes that question entirely.
+#
+# The list is every script named in docs/measurement-log.md or a registration under docs/. Add to
+# it whenever a new registration names a script; a formatter run is otherwise free to rewrite the
+# evidence. This was not hypothetical -- `ruff format` reflowed extended_ic.py twice on 31 Aug.
+extend-exclude = [
+    "scripts/block_permutation.py",
+    "scripts/cost_breakeven.py",
+    "scripts/extended_ic.py",
+    "scripts/iv_series_probe.py",
+    "scripts/review_remediation.py",
+    "scripts/roll_regime.py",
+    "scripts/roll_spread.py",
+]
 
 [tool.ruff.lint]
 select = [
