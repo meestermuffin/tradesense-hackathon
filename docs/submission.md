@@ -76,6 +76,13 @@ Also measured: pairwise correlation of +0.409, rising to +0.554 in volatile regi
 positions behave like 1.67 independent bets. Not measured, and labelled as such: whether the broker
 nets assignment against same-day exercise.
 
+The concentration that follows from this is worth stating rather than leaving for a reader to
+notice. Two of the structures share an underlying, an expiry and near-identical strikes, so they
+breach together and the book is closer to one position than to two. We knew that when the second
+was placed, because the model raised it as a reason to refuse and a human overrode it. The risk was
+accepted with the argument in front of us, and it is bounded: these are defined-risk condors, only
+one side of each can breach, and the maximum loss is known at entry.
+
 400 tests cover the trading path and 51 the mark instrumentation, all against fakes, so the suite
 runs on a fresh clone with no credentials and no network.
 
