@@ -1,9 +1,9 @@
 {
   "broker": {
     "cash": 104473.06,
-    "equity": 102973.06,
+    "equity": 102961.06,
     "open_legs": 14,
-    "spot": 764.73
+    "spot": 764.88
   },
   "disclaimer": "Static snapshot. This page does not call any broker and holds no credentials; it renders the JSON committed alongside it. The trading signal this project began with was falsified and shelved -- see docs/2026-08-30-strategy-shelved.md. No predictive edge is claimed.",
   "equity_curve": [
@@ -462,6 +462,10 @@
     {
       "equity": 102960.06,
       "ts": "2026-09-02T18:42:52.121625+00:00"
+    },
+    {
+      "equity": 102961.06,
+      "ts": "2026-09-02T18:50:54.393227+00:00"
     }
   ],
   "fills": [
@@ -626,16 +630,16 @@
       "symbol": "SPY260903C00773000"
     }
   ],
-  "generated_at": "2026-09-02T18:43:13.418751+00:00",
-  "latest_equity": 102960.06,
+  "generated_at": "2026-09-02T18:51:27.790246+00:00",
+  "latest_equity": 102961.06,
   "mark_quality": {
-    "coverage": 0.5637,
+    "coverage": 0.5677,
     "feed": "indicative",
-    "latest": "2026-09-02T18:42:52.121625+00:00",
-    "mean_quote_age_s": 4659.76,
+    "latest": "2026-09-02T18:50:54.393227+00:00",
+    "mean_quote_age_s": 4616.18,
     "note": "indicative quotes are DERIVED, not the true OPRA NBBO. Recorded per row.",
-    "priced": 6694,
-    "samples": 11876
+    "priced": 6806,
+    "samples": 11988
   },
   "start_equity": 100000.0,
   "structures": [

@@ -110,7 +110,7 @@ probe:  ## IV-series gate probe, stage 2, v2 selection
 
 ## ---- scheduler ----
 
-schedule:  ## install the four agents. Arm with: make schedule LIVE=1 ACCOUNT=PA...
+schedule:  ## install the four SHELVED-path agents. Arm: make schedule LIVE=1 ACCOUNT=PA...
 	@LIVE=$(LIVE) ACCOUNT=$(ACCOUNT) bash scripts/install_schedule.sh
 
 agent-schedule:  ## install the condor agent's dated runs. Arm with: LIVE=1 ACCOUNT=PA...
@@ -119,8 +119,10 @@ agent-schedule:  ## install the condor agent's dated runs. Arm with: LIVE=1 ACCO
 agent-unschedule:  ## remove the condor agent's dated runs
 	@bash scripts/uninstall_agent_schedule.sh
 
-cleanup:  ## remove THIS project's four agents. Requires CONFIRM=yes
-	@echo "This removes only these four labels, by name — never by wildcard:"
+cleanup:  ## remove the four SHELVED-path agents. Condor ones: make agent-unschedule
+	@echo "This removes only these four labels, by name — never by wildcard."
+	@echo "The condor agent's dated jobs (com.tradesense.agent.*) are NOT touched;"
+	@echo "use 'make agent-unschedule' for those."
 	@for n in capture cycle snapshot heartbeat; do echo "    com.tradesense.$$n"; done
 	@echo
 	@echo "Anything else stays. Currently loaded and NOT touched by this target:"
@@ -147,6 +149,15 @@ else
 	@echo "NOTE: the wake schedule is left alone. If trade-sense agents rely on it, removing it"
 	@echo "      would stop them too:  sudo pmset repeat cancel"
 endif
+
+pin:  ## expiry-day assignment risk on the open book — reports, never closes
+	@uv run python scripts/pin_check.py $(if $(ACCOUNT),--expect-account $(ACCOUNT),)
+
+agent:  ## the condor agent — DRY RUN. Live needs scripts/run_agent.py --live
+	@uv run python scripts/run_agent.py $(if $(ACCOUNT),--expect-account $(ACCOUNT),)
+
+site:  ## rebuild the published snapshot at docs/ — commit the result to publish it
+	@uv run python scripts/build_site.py
 
 logs:  ## tail the scheduled-job logs
 	@tail -n 25 logs/*.log 2>/dev/null || echo "no logs yet — nothing has run"
