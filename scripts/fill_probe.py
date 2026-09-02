@@ -99,6 +99,16 @@ def verdict_path(session: datetime.date) -> str:
     return os.path.join(PROBE_DIR, f"{session:%Y-%m-%d}-verdict.json")
 
 
+MAX_VERDICT_AGE_DAYS = 7
+"""How far back the gate will look for a probe.
+
+The probe measures the venue -- whether four legs clear at a single mid limit on this simulator --
+not the session. That fact does not expire overnight, and re-probing daily would place an unwanted
+extra contract every morning. But it is not permanent either: a week is one judged window, and a
+verdict from a different one says nothing about today.
+"""
+
+
 def read_verdict(session: datetime.date) -> dict | None:
     """What `run_agent.py --live` calls. Absent is not the same as passing."""
     try:
@@ -106,6 +116,32 @@ def read_verdict(session: datetime.date) -> dict | None:
             return json.load(f)
     except (OSError, ValueError):
         return None
+
+
+def latest_verdict(session: datetime.date) -> tuple[datetime.date, dict] | None:
+    """The newest verdict at or before `session`, with the date it was written for.
+
+    Newest wins: a later STOP must not be overridden by an earlier CONDORS still on disk.
+    """
+    try:
+        names = os.listdir(PROBE_DIR)
+    except OSError:
+        return None
+    found = []
+    for n in names:
+        if not n.endswith("-verdict.json"):
+            continue
+        try:
+            d = datetime.date.fromisoformat(n[: -len("-verdict.json")])
+        except ValueError:
+            continue
+        if d <= session:
+            found.append(d)
+    for d in sorted(found, reverse=True):
+        v = read_verdict(d)
+        if v is not None:
+            return d, v
+    return None
 
 
 def main() -> int:
@@ -262,15 +298,22 @@ def gate(session: datetime.date) -> tuple[bool, str]:
     Placing condors after condors failed to fill would contradict the registration while claiming
     to follow it, so the honest behaviour is to stop and put the decision in front of a person.
     """
-    v = read_verdict(session)
-    if v is None:
+    got = latest_verdict(session)
+    if got is None:
         return False, (
-            f"no probe verdict for {session}. The 09:45 probe has not run, or it crashed. "
+            f"no probe verdict at or before {session}. The probe has not run, or it crashed. "
             f"Run scripts/fill_probe.py --live, or pass --skip-probe-gate to place without it."
+        )
+    on, v = got
+    age = (session - on).days
+    if age > MAX_VERDICT_AGE_DAYS:
+        return False, (
+            f"probe verdict is stale: written {on}, {age} days before {session} "
+            f"(limit {MAX_VERDICT_AGE_DAYS}). Re-probe before sizing."
         )
     verdict = v.get("verdict")
     if verdict in PROCEED:
-        return True, f"probe verdict {verdict}: {v.get('why', '')}"
+        return True, f"probe verdict {verdict} from {on}: {v.get('why', '')}"
     if verdict == PAIRED_VERTICALS:
         return False, (
             "probe verdict PAIRED_VERTICALS: four legs did not clear at one limit. The registered "

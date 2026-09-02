@@ -235,3 +235,74 @@ def test_a_missing_binary_still_refuses_rather_than_approving(monkeypatch):
     monkeypatch.setattr(m, "FALLBACK_BINS", ())
     d = m.review({"underlying": "SPY", "expiry": "2026-09-02", "short_delta": 0.20})
     assert d.decision == "refuse"
+
+
+# ---- a refusal reason must stay readable
+
+
+def test_a_timeout_reason_does_not_contain_the_prompt():
+    """The 2026-09-01 Tuesday job refused with the whole prompt in the reason.
+
+    `subprocess.TimeoutExpired` formats as "Command '[...whole argv...]' timed out after N
+    seconds", and the argv holds the entire prompt. That went into the Decision reason, into the
+    log, and pushed the actual cause -- the words "timed out" -- off the end of the write. The one
+    line a human reads to find out why a tranche was skipped became unreadable.
+    """
+    import subprocess
+
+    import src.agent.model as m
+
+    def timing_out(prompt, timeout=None):
+        raise subprocess.TimeoutExpired(cmd=["claude", "-p", "X" * 4000], timeout=180)
+
+    d = m.review({"underlying": "SPY", "expiry": "2026-09-03"}, ask=timing_out)
+    assert d.decision == "refuse"
+    assert len(d.reason) <= 200, f"reason is {len(d.reason)} chars"
+    assert "timed out" in d.reason.lower()
+    assert "XXXX" not in d.reason
+
+
+def test_a_long_error_of_any_kind_is_truncated():
+    import src.agent.model as m
+
+    def boom(prompt, timeout=None):
+        raise RuntimeError("Y" * 5000)
+
+    d = m.review({"underlying": "SPY"}, ask=boom)
+    assert d.decision == "refuse" and len(d.reason) <= 200
+
+
+def test_a_timeout_is_retried_once_before_refusing():
+    """A registered tranche should not be lost to one slow call.
+
+    Failing closed is the safety property and is unchanged -- a second timeout still refuses.
+    But the first attempt timing out is a transport hiccup, not a judgement, and Tuesday's
+    tranche was skipped on exactly that.
+    """
+    import subprocess
+
+    import src.agent.model as m
+
+    calls = []
+
+    def flaky(prompt, timeout=None):
+        calls.append(1)
+        if len(calls) == 1:
+            raise subprocess.TimeoutExpired(cmd=["claude"], timeout=180)
+        return envelope('{"decision":"approve","reason":"fine on the retry"}')
+
+    d = m.review({"underlying": "SPY"}, ask=flaky)
+    assert len(calls) == 2
+    assert d.decision == "approve"
+
+
+def test_two_timeouts_still_refuse():
+    import subprocess
+
+    import src.agent.model as m
+
+    def always(prompt, timeout=None):
+        raise subprocess.TimeoutExpired(cmd=["claude"], timeout=180)
+
+    d = m.review({"underlying": "SPY"}, ask=always)
+    assert d.decision == "refuse"
