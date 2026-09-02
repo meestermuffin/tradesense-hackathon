@@ -37,3 +37,7 @@ logs/archive/
 journal.db
 journal.db-*
 markwatch/preflight.db*
+
+# Talking points, not a deliverable. docs/ is the Pages root, so anything left
+# there is publicly served at a guessable URL.
+docs/demo-script.md

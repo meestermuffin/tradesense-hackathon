@@ -12,7 +12,7 @@ built. So `generated_at` goes in the payload and the page shows it prominently.
 Reads the markwatch journal and, when credentials are present, the broker. Neither is required to
 render — a clone with no `.env` still builds a page from the committed journal.
 
-    uv run python scripts/build_site.py            # writes docs/site/data.json
+    uv run python scripts/build_site.py            # writes docs/data.json
     uv run python scripts/build_site.py --no-broker
 
 Regenerate after the Thursday close and commit the result; that is what publishes the final
@@ -29,7 +29,10 @@ import sys
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
 
-SITE = os.path.join(REPO, "docs", "site")
+# Pages serves `docs/` as the site root, so the page lives at docs/index.html rather than in a
+# subdirectory. A submission URL should be the bare Pages address, not a path into it -- and a
+# root that 404s is the first thing a judge would see.
+SITE = os.path.join(REPO, "docs")
 START_EQUITY = 100_000.0
 
 
