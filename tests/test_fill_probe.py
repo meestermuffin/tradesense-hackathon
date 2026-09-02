@@ -170,3 +170,54 @@ def test_the_verdict_payload_only_reads_fields_that_exist():
     for f in payload_fields:
         getattr(r, f)
     assert fp.verdict_for(r)[0] == fp.CONDORS
+
+
+# ---- the verdict is a property of the venue, not of one session
+
+
+def test_the_gate_accepts_a_recent_earlier_verdict(tmp_path, monkeypatch):
+    """The probe answers a question about the simulator, not about today.
+
+    Keying the gate to the session date meant Tuesday demanded its own probe and refused with
+    "the 09:45 probe has not run" while Monday's CONDORS verdict sat on disk. That is a false
+    refusal: the measured fact -- four legs clear at a single mid limit here -- did not expire
+    overnight, and re-probing daily would place an extra unwanted contract every session.
+    """
+    import json
+
+    import scripts.fill_probe as fp
+
+    monkeypatch.setattr(fp, "PROBE_DIR", str(tmp_path))
+    (tmp_path / "2026-08-31-verdict.json").write_text(
+        json.dumps({"verdict": CONDORS, "why": "filled at mid", "consequence": "c"})
+    )
+    ok, why = fp.gate(dt.date(2026, 9, 1))
+    assert ok, why
+    assert "2026-08-31" in why, "the gate must say which probe it is relying on"
+
+
+def test_a_stale_verdict_is_refused(tmp_path, monkeypatch):
+    """Recent means recent. A verdict from a different market week says nothing about today."""
+    import json
+
+    import scripts.fill_probe as fp
+
+    monkeypatch.setattr(fp, "PROBE_DIR", str(tmp_path))
+    (tmp_path / "2026-08-03-verdict.json").write_text(
+        json.dumps({"verdict": CONDORS, "why": "ancient", "consequence": "c"})
+    )
+    ok, why = fp.gate(dt.date(2026, 9, 1))
+    assert not ok
+    assert "stale" in why.lower() or "days" in why.lower()
+
+
+def test_the_newest_verdict_wins(tmp_path, monkeypatch):
+    """A later STOP must not be overridden by an earlier CONDORS still sitting on disk."""
+    import json
+
+    import scripts.fill_probe as fp
+
+    monkeypatch.setattr(fp, "PROBE_DIR", str(tmp_path))
+    (tmp_path / "2026-08-31-verdict.json").write_text(json.dumps({"verdict": CONDORS, "why": "a"}))
+    (tmp_path / "2026-09-01-verdict.json").write_text(json.dumps({"verdict": STOP, "why": "b"}))
+    assert not fp.gate(dt.date(2026, 9, 1))[0]

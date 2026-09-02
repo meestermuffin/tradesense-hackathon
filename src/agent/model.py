@@ -153,15 +153,30 @@ def review(context: dict[str, Any], ask=ask, timeout: float = TIMEOUT_S) -> Mode
 
     `ask` is injected so the decision logic is testable without spending a call or a network.
     """
-    try:
-        raw = ask(build_prompt(context), timeout=timeout)
-    except TimeoutError:
-        return ModelDecision(decision="refuse", reason=f"model timed out after {timeout:.0f}s")
-    except Exception as e:  # a broken reviewer must not become an approval
-        # Truncated deliberately: subprocess errors embed the whole prompt, which buries the
-        # actual decision under a wall of text in the one place someone is reading quickly.
-        detail = str(e).split("\n")[0][:160]
-        return ModelDecision(decision="refuse", reason=f"model call failed: {detail}")
+    prompt = build_prompt(context)
+    # One retry, on timeout only. Failing closed is unchanged -- a second timeout still refuses --
+    # but Tuesday's registered tranche was lost to a single slow call, and a transport hiccup is
+    # not a judgement about the trade. Anything else fails on the first attempt: a malformed
+    # response or a missing binary will not fix itself, and retrying it just burns the window.
+    for attempt in (1, 2):
+        try:
+            raw = ask(prompt, timeout=timeout)
+            break
+        except (TimeoutError, subprocess.TimeoutExpired):
+            if attempt == 1:
+                continue
+            return ModelDecision(
+                decision="refuse", reason=f"model timed out after {timeout:.0f}s, twice"
+            )
+        except Exception as e:  # a broken reviewer must not become an approval
+            # Keep the END of the message, not the start. `TimeoutExpired` formats as
+            # "Command '[...entire argv...]' timed out after N seconds" with the prompt escaped
+            # into a single line, so truncating the front yields 160 characters of prompt and
+            # discards the only words that say what went wrong. Observed on 2026-09-01.
+            detail = " ".join(str(e).split())
+            if len(detail) > 160:
+                detail = detail[:60] + " ... " + detail[-95:]
+            return ModelDecision(decision="refuse", reason=f"model call failed: {detail}")
 
     got = extract_json(raw)
     if not got:

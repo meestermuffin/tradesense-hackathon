@@ -89,6 +89,25 @@ emit () {  # name  month  day  hour  minute  script  [args...]
   local name=$1 month=$((10#$2)) day=$((10#$3)) hour=$((10#$4)) min=$((10#$5)) script=$6
   shift 6
   local label="com.tradesense.agent.$name"
+
+  # Never install a job whose moment has passed. launchd can treat a missed StartCalendarInterval
+  # as due and run it on load, which for an armed entry job means placing the same tranches twice
+  # against a book that already holds them. Re-running this installer mid-window is normal --
+  # arming Tuesday should not resurrect Monday.
+  local today_md now_md
+  today_md=$(date +%m%d); now_md=$(printf "%02d%02d" "$month" "$day")
+  if [ "$now_md" -lt "$today_md" ]; then
+    launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+    rm -f "$AGENTS/$label.plist"
+    printf "  skipped   %-30s %02d-%02d is in the past\n" "$label" "$month" "$day"
+    return 0
+  fi
+  if [ "$now_md" = "$today_md" ] && [ "$(date +%H%M)" -gt "$(printf '%02d%02d' "$hour" "$min")" ]; then
+    launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+    rm -f "$AGENTS/$label.plist"
+    printf "  skipped   %-30s %02d:%02d already passed today\n" "$label" "$hour" "$min"
+    return 0
+  fi
   local args=""
   for a in "$@"; do args="$args        <string>$a</string>"$'\n'; done
   cat > "$AGENTS/$label.plist" <<PLIST
@@ -136,7 +155,14 @@ emit tranches 8 31 10 00 run_agent.py --at 10:00 --session 2026-08-31 $ARM
 
 # 09:35 Tue -- the conditional third tranche. Both registered gate conditions are evaluated inside
 # the loop; a refusal here is the correct outcome and is recorded as one, not as a shortfall.
-emit tuesday 9 1 09 35 run_agent.py --at 09:35 --session 2026-09-01 $ARM
+# --fill-vs-mid is Monday's MEASURED result, not an estimate. Three orders went in on 31 Aug:
+# the 1-lot probe filled at exactly mid (+0.000), the Sep 3 tranche filled at +0.02 (price
+# improvement), and the Sep 2 tranche rested unfilled. The worst *filled* result is +0.000, which
+# is what is passed -- the conservative reading, and the gate opens on either since both clear the
+# -0.05 floor. Passing it explicitly rather than deriving it: the journal records net_limit but not
+# filled_avg, so there is nothing to read back, and a silent None closes the gate on a missing
+# input rather than on a real condition.
+emit tuesday 9 1 09 35 run_agent.py --at 09:35 --session 2026-09-01 --fill-vs-mid 0.00 $ARM
 
 echo
 echo "Installed. Verify:  launchctl list | grep tradesense.agent"
