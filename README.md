@@ -1,18 +1,46 @@
-# Options volatility-premium agent
+# Defined-risk options agent
 
-A defined-risk options agent, its risk layer, and the measurement record that **falsified its own
-trading signal**.
+Sells short-premium iron condors on SPY, with a model in the loop that can veto any entry and a
+risk layer that can veto the model.
 
 Built for the Alpaca AI Trading Agents Hackathon, 28 Aug – 4 Sep 2026. MIT licensed.
 
-> **The signal this was built on is shelved.** Ranking names by where implied volatility sits
-> against their own history read rank IC +0.1753 on the sample it was developed on, and **+0.0414
-> (p 0.2184) on 327 sessions no test had touched.** It does not replicate. Full account, including
-> what is *not* shelved, in [`docs/2026-08-30-strategy-shelved.md`](docs/2026-08-30-strategy-shelved.md).
->
-> **Nothing here claims predictive skill.** What is measured and stands: the risk profile, the
-> execution findings, the Alpaca behaviour, and a discipline that caught this before it shipped
-> rather than after.
+We set out to trade a volatility-premium signal: rank names by where implied volatility sits
+against their own history, sell the richest. On the sample we developed it on it looked good, with
+a rank information coefficient of +0.1753 and a control arm on raw IV level reading −0.1055.
+
+Late in development we found that every test had been run against 249 of the 597 sessions committed
+to this repository. On the remaining 327, which no test had touched, the same measurement reads
++0.0414 with a p-value of 0.2184. Significant in sample, absent out of sample. We shelved it and
+wrote down what had happened, including the parts that survive, in
+[`docs/2026-08-30-strategy-shelved.md`](docs/2026-08-30-strategy-shelved.md).
+
+What trades in its place makes no prediction. It is a ladder of defined-risk iron condors on SPY,
+sold short-premium and held to expiry, which profits from the passage of time rather than from
+knowing where the underlying is going. The payoff shape is structural. The profitability is not,
+and we are careful to separate the two below.
+
+The interesting result is not the strategy but the review layer. A language model sits between the
+plan and the order, and its authority is deliberately one-directional: it may refuse an entry, or
+tighten the short delta within a registered band, and it can do nothing else. It cannot express a
+price, because the field is absent from the schema it writes. Approval is not sufficient, since
+eleven deterministic guardrails run afterwards regardless. Every failure path resolves to a
+refusal, so a bad response from the model costs a trade and cannot cause one.
+
+On its first live run it refused a trade, and it was right for a reason we had not anticipated. It
+observed that both short deltas had been computed from a single flat implied volatility, which made
+a put and a call at unequal distance from spot report near-identical deltas of 0.197 and 0.198.
+Inverting each strike against its own quote gave true deltas of 0.221 and 0.171. The guardrail
+responsible for keeping short deltas inside a band had therefore been validating a figure that did
+not describe the position it was protecting. We had written that guardrail, tested it, and watched
+it pass. A rules engine could not have caught the error, because the rule was checking the wrong
+number rather than checking it wrongly.
+
+We make no claim to predictive skill, and quote no backtest anywhere in this repository, since the
+only one we produced was falsified. What we do claim is narrower: that the execution findings are
+measured rather than assumed, that the risk layer refuses what it says it refuses, and that the
+discipline which caught our own signal failing is the same discipline that caught the guardrail
+defect. Both were found before they cost anything.
 
 **Live snapshot:** <https://meestermuffin.github.io/tradesense-hackathon/> — equity, every
 structure submitted, and each leg fill against the NBBO captured at submission. It is a **static
@@ -23,23 +51,29 @@ so it is only as current as its last build. The build timestamp is on the page.
 
 ## What actually trades
 
-Not the shelved signal. A short-premium ladder of defined-risk SPY iron condors, resting on payoff
-shape rather than prediction: the book collects decay each session and loses only on a large move.
-That is a structural argument, stated as the hypothesis it is.
+Not the shelved signal. A short-premium ladder of defined-risk SPY iron condors.
+
+**The payoff shape is structural; the profitability is not.** A condor is theta-positive and its
+loss is bounded and requires a move — both true by construction. But selling premium is
+compensation for gamma risk, and it pays only while implied volatility runs above what is
+subsequently realized. If the two are equal the expected value is zero before costs and negative
+after.
+
+On the entry days implied did run richer — 2-DTE ATM implied 0.126 against realized of 0.065 (5d),
+0.077 (10d) and 0.103 (21d). That is a hint, not a measurement: close-to-close understates
+intraday range, and a 2-DTE implied is not cleanly comparable to 21-day realized. It is stated as
+the hypothesis it is, and it is the reason this is not presented as an edge.
 
 ```bash
 uv run python scripts/run_agent.py                       # dry run, today's session
 uv run python scripts/fill_probe.py --expect-account PA...  # the registered 1-lot fill probe
 uv run python scripts/pin_check.py                       # expiry-day assignment risk; reports only
-make agent-schedule                                      # dated launchd runs, installed unarmed
 ```
 
-**A model is in the loop, and its authority is narrow and asymmetric.** It reviews every tranche
-and may refuse one, or tighten the short delta inside a registered band. It cannot express a price
-— the field is absent from the schema it writes — and approving is not sufficient, because eleven
-deterministic guardrails run afterwards regardless. Every failure path resolves to a refusal:
+The model reviews every tranche and may refuse one, or tighten the short delta inside a registered band. 
+It cannot express a price — the field is absent from the schema it writes — and approving is not sufficient, because eleven deterministic guardrails run afterwards regardless. Every failure path resolves to a refusal:
 unparseable output, a timeout, an empty reason. **A bad model response costs a trade and cannot
-cause one.**
+cause one.
 
 On its first live run it refused a trade and was right: it caught that both short deltas were
 computed from a single flat implied vol, so the delta guardrail was validating numbers that did not
@@ -90,37 +124,6 @@ both.
 It does not display Sharpe. Over a handful of sessions that number cannot separate skill from luck,
 and showing one would imply a precision the sample does not support.
 
-### Scheduled agents
-
-`make schedule` installs four `launchd` agents: NBBO capture at 15:50, the cycle at 16:05, an equity
-snapshot at 16:45, and a heartbeat at 09:00. Installed dry — arming takes
-`make schedule LIVE=1 ACCOUNT=<your account>`, and the account is baked into the plist as an
-assertion so swapping `.env` without re-installing aborts rather than trading the wrong book.
-
-**Data written by these is namespaced by account** — captures under `data/nbbo/<account>/`,
-selection records under `data/selection/<account>/`, and one equity curve per account under
-`data/equity/`, each created on first run. Running them alongside someone else's is safe.
-
-**The one thing that is not safe: two machines armed live against the *same* account.** Each sizes
-against the same 20% risk budget independently, so the account carries double the intended exposure
-while each cycle believes it is within limits. The overlap lock is a file inside the clone and cannot
-see across machines — it exists to stop a scheduler retry double-trading on one host, and it gives
-no protection here. Use your own account, or make sure only one machine is armed.
-
-They also do not survive sleep. `launchd` does not fire calendar jobs while a machine is asleep; it
-fires them late, on wake, which is useless for a job whose value is being inside market hours. An
-operating machine needs `sudo pmset repeat wakeorpoweron MTWRF 15:40:00`.
-
-**`make agent-schedule` is a different set**, for the condor path: dated one-shot runs during the
-judged window rather than a Mon–Fri repeat. It refuses to install an interpreter that cannot import
-the project, bakes an absolute path to the model CLI into each plist because a `launchd` job has
-almost no `PATH`, and re-verifies that the credentials resolve to the named account before arming.
-
-Because a missed calendar job fires on wake rather than being skipped, **every dated run passes
-`--at HH:MM` and refuses outside a ten-minute window**. A closed laptop therefore produces no trade
-rather than a late one — an entry placed four hours after its moment is a different trade against a
-different book, and nothing in the order would say so.
-
 ## Layout
 
 ```
@@ -130,7 +133,7 @@ src/models.py   every shape that crosses a boundary, in one file
 src/agent/      the trading agent: loop, model reviewer, MCP toolsets, collector supervisor
 src/options/    condor construction, guardrails, IV inversion, chain assembly
 scripts/        measurement runners and the operational jobs
-markwatch/      Solo's mark-quality instrumentation — samples the book every 60s and
+markwatch/      Mark-quality instrumentation — samples the book every 60s and
                 values it three ways: broker, mid, and what closing now would realise
 tests/          fakes only — the suite runs on a fresh clone with no keys
 docs/           measurement log, cost model — and the published dashboard (Pages root)
