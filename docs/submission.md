@@ -1,81 +1,83 @@
-# tradesense — Alpaca AI Trading Agents Hackathon
+# tradesense
 
-An autonomous options agent that sells defined-risk premium on SPY — and the record of the signal it
-was built to trade on, which we tested, falsified and shelved before the window opened.
+A defined-risk options agent that sells short-premium iron condors on SPY, with a language model in
+the loop that can veto any entry and a risk layer that can veto the model.
 
-## We do not claim an edge
+## What we set out to do, and what happened
 
-We built a volatility-premium signal: rank names by where implied vol sits against their own
-history, sell the richest. On the sample we developed it on it looked good — rank IC **+0.1753**.
-Then we found every test had used 249 of the 597 sessions committed in the repo. On the **327
-sessions no test had touched**, the same measurement reads **+0.0414, p 0.2184** — significant
-in-sample, absent out-of-sample, the textbook signature of overfitting. Shelved, publicly, in
-`docs/2026-08-30-strategy-shelved.md`.
+We built a volatility-premium signal: rank names by where implied volatility sits against their own
+history, and sell the richest. On the sample we developed it against it looked good, with a rank
+information coefficient of +0.1753 and a control arm on raw IV level reading −0.1055.
 
-**What trades instead rests on payoff shape.** A short-premium book collects decay every session and
-loses only on a large move, so over four sessions it finishes modestly green more often than not.
-That is a structural argument, and we state it as the hypothesis it is.
+Late in development we found that every test had run against 249 of the 597 sessions committed to
+the repository. On the remaining 327, which no test had touched, the same measurement reads +0.0414
+with a p-value of 0.2184. Significant in sample, absent out of sample. We shelved it and published
+the account in `docs/2026-08-30-strategy-shelved.md`, including the parts that survive.
 
-## How the measurement stayed honest
+What trades in its place makes no prediction. It is a ladder of defined-risk iron condors held to
+expiry, which profits from the passage of time rather than from knowing where SPY is going. The
+payoff shape is structural: the position is theta-positive, and its loss is bounded and requires a
+move. The profitability is not structural. Selling premium is compensation for gamma risk, and it
+pays only while implied volatility runs above what is subsequently realized. On our entry days it
+did, with 2-DTE implied at 0.126 against realized of 0.065 to 0.103, but that is a hint rather than
+a measurement and we do not present it as an edge.
 
-Every result was registered before it ran — design, thresholds and decision table committed to git
-first, so `git merge-base --is-ancestor` proves the prediction preceded the outcome.
+## The review layer, which is the actual result
 
-That caught four defects in our own work, three previously unnoticed: a permutation null **~3× too
-narrow** because it ignored a 21-session overlap, so every published p-value read the floor; a cost
-figure overstated by exactly **2.00×**; and a day-count mismatch that made a genuine 20-delta strike
-appear to sit at 0.67× the expected move. The plan had described that last one as a deliberate
-choice. It was a bug. Two adversarial reviews are in the repo, including the one that refuted us.
+A model sits between the plan and the order. Its authority is one-directional by construction: it
+may refuse an entry, or tighten the short delta within a registered band, and nothing else. It
+cannot express a price, because the field is absent from the schema it writes.
 
-## The agent
+That omission is deliberate and it is load-bearing. On a multi-leg Alpaca order the limit price is a
+*net* price where negative means a credit, and inverting the sign raises no error. It places a real
+order at the wrong price, silently. Rather than validate the model's arithmetic downstream, we
+removed its ability to do the arithmetic at all.
 
-The model emits a **template** — underlying, expiry, short delta, width, contracts, rationale. It
-**cannot express a price**; the tool solves the strikes and computes the net limit itself. On a
-multi-leg Alpaca order `limit_price` is a *net* price where negative means credit, and inverting it
-does not raise — it places a real order at the wrong price, silently. Rather than check the model's
-arithmetic downstream, the field is absent from the schema it writes.
+Approval is not sufficient either. Eleven deterministic guardrails run afterwards regardless, each
+returning a structured veto naming the rule that fired. Every failure path in the model resolves to
+a refusal, including an unparseable response, a timeout, and an empty reason. A bad response from
+the model therefore costs a trade and cannot cause one.
 
-**Its authority is narrow and asymmetric.** The model may refuse a trade, and may *tighten* the
-short delta inside a registered band. It cannot change the ladder, the sizing or the expiries, and
-approving is not sufficient — the guardrails run afterwards regardless. Every failure path resolves
-to a refusal: unparseable output, a timeout, an empty reason. **A bad model response costs a trade
-and cannot cause one.**
+On its first live run it refused a trade, and it was right for a reason we had not anticipated. It
+observed that both short deltas had been computed from a single flat implied volatility, which made
+a put and a call at unequal distance from spot report near-identical deltas of 0.197 and 0.198.
+Inverting each strike against its own quote gave true deltas of 0.221 and 0.171. The guardrail
+responsible for keeping short deltas inside a band had been validating a figure that did not
+describe the position it was protecting. We had written that guardrail, tested it, and watched it
+pass. A rules engine could not have caught the error, because the rule was checking the wrong number
+rather than checking it wrongly.
 
-**On its first live run it refused a trade, and it was right.** It objected that both short deltas
-came from a single flat implied vol, so the 763 put and 776 call reported a near-identical 0.197
-despite unequal distance from spot — and that under SPY's real put skew the put was nearer 0.24, the
-call nearer 0.17. Checked against live quotes: their own vols invert to 0.1488 and 0.1201, making
-the true deltas **0.221 and 0.171**. The delta guardrail had been passing a position whose actual
-deltas sat outside the band it exists to enforce. Strikes are now solved on the skew surface. It
-caught what the rules could not, because the rules were checking a number that did not describe the
-position.
+Capability isolation is enforced by the process rather than by a prompt. The agent's MCP server
+starts with `ALPACA_TOOLSETS=account,assets,news`, twenty tools, and `place_option_order` is not
+among them. Ordering runs on a second instance behind the guardrail layer. We verified this by
+listing the tools available to each.
 
-**Capability isolation is a property of the process, not a prompt.** The agent's MCP server starts
-with `ALPACA_TOOLSETS=account,assets,news` — 20 tools, and `place_option_order` is not among them.
-Ordering lives on a second instance behind the guardrails. Verified by listing tools on each.
+## Execution, measured rather than assumed
 
-**Eleven guardrails** stand between decision and submission, each returning a structured veto naming
-the rule that fired — including an account assertion, because trading the wrong paper book is the
-one error that produces no signal at all, and a kill switch keyed on mark-to-market drawdown rather
-than realised loss, because a book that closes nothing realises nothing until expiry.
+There is no historical options quote endpoint on this account, so a fill not captured at the moment
+of submission is uninterpretable afterwards. Before sizing anything we ran a registered
+one-contract probe to establish whether four legs clear at a single mid limit here. All four filled
+at exactly the captured NBBO mid, thirty-six milliseconds after the order reached the book. That
+verdict then gates the sized entries, which refuse without it, because a probe that crashed looks
+identical to one that never ran and absence is not permission.
 
-**The score is a mark, not a fill.** If the paper engine marks a multi-leg book at mid it credits us
-spread we could never have collected — roughly $1,015 here, about a third of the expected result —
-and no guardrail sees it, because the book moves with no trade. So `markwatch/` samples every 60
-seconds and values the book three ways: what the broker says, what it is worth at mid, and what
-closing now would realise.
+Against the NBBO captured at submission, the four structures filled at +0.000, −0.010, −0.055 and
+−0.015 relative to mid. The third is worth naming because we first reported it as price improvement.
+That figure had been computed against the mid we estimated at planning time rather than the market
+at submission, and the two differed by 0.075. The correction is recorded in the issue tracker rather
+than quietly amended.
 
-## Measured, and not
+The scored number is a mark, not a fill. If the paper engine values a multi-leg book at mid it
+credits us spread we could never have collected, and no guardrail can see it because the book moves
+with no trade. The instrumentation therefore samples every sixty seconds and values the book three
+ways: what the broker reports, what it is worth at mid, and what closing it now would realize.
 
-Measured: pairwise correlation **+0.409**, rising to **+0.554** in volatile regimes, so ten
-positions behave like 1.67 independent bets; fees at $0.025 per contract-leg; and that this account
-serves no implied volatility at all, so IV is computed by Black–Scholes inversion rather than read.
+Also measured: pairwise correlation of +0.409, rising to +0.554 in volatile regimes, so ten
+positions behave like 1.67 independent bets. Not measured, and labelled as such: whether the broker
+nets assignment against same-day exercise.
 
-Not measured, and labelled so: whether four-leg orders fill at a mid limit — a registered one-lot
-probe settles that before anything is sized — and whether the broker nets assignment against
-same-day exercise.
-
-**333 tests** in the trading path and **51** in the mark instrumentation, no network needed, on a fresh clone.
+400 tests cover the trading path and 51 the mark instrumentation, all against fakes, so the suite
+runs on a fresh clone with no credentials and no network.
 
 ## Results
 
@@ -83,5 +85,5 @@ same-day exercise.
 
 ---
 
-MIT licensed. The measurement log, the registrations, the reviews that refuted us, and the record of
-what we got wrong are all in this repository.
+MIT licensed. The measurement log, the registrations, the adversarial reviews including the one that
+refuted us, and the record of what we got wrong are all in this repository.
