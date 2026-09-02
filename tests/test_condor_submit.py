@@ -209,8 +209,11 @@ def test_the_record_round_trips_through_json():
 
 
 class FakeSub:
-    def __init__(self):
+    def __init__(self, quotes_at_submit=None):
         self.vetoes, self.orders, self.fills = [], [], []
+        # markwatch's real submission context carries this; the fake mirrors it so the
+        # journalled path is exercised as it actually runs.
+        self.quotes_at_submit = quotes_at_submit or {}
 
     @property
     def vetoed(self):
@@ -349,3 +352,89 @@ def test_a_cancel_that_fails_does_not_lose_the_record():
 
     rec = submit(Refuses(status="new"), a_plan(), vetoes=[], poll_seconds=0.2, cancel_unfilled=True)
     assert rec.ok and not rec.filled
+
+
+# ---- the submit-time NBBO reaches the returned model
+
+
+def test_captured_nbbo_is_attached_to_each_leg():
+    """Monday's verdict recorded four null legs while the NBBO sat in the journal unjoined.
+
+    `CondorLegFill` declares bid and ask, but `_place` never set them, so `vs_touch` could not be
+    computed and `vs_mid` could only be checked against our own estimate of the mid. Submission is
+    the only moment these prices exist -- there is no historical options quote endpoint here.
+    """
+    from src.options.condor import _with_captured_nbbo
+
+    rec = submit(FakeClient(), a_plan(), vetoes=[])
+    quotes = {leg.symbol: {"bid": 1.0, "ask": 1.1} for leg in rec.legs}
+    got = _with_captured_nbbo(rec, quotes)
+    assert got.legs, "the fixture must produce legs or this asserts nothing"
+    assert all(x.bid == 1.0 and x.ask == 1.1 for x in got.legs)
+
+
+def test_a_leg_the_capture_missed_keeps_its_nulls():
+    """An absent quote is a fact. Filling it from a later poll would price the fill against a
+    different market, which is worse than admitting the gap."""
+    from src.options.condor import _with_captured_nbbo
+
+    rec = submit(FakeClient(), a_plan(), vetoes=[])
+    first = rec.legs[0].symbol
+    got = _with_captured_nbbo(rec, {first: {"bid": 1.0, "ask": 1.1}})
+    by = {x.symbol: x for x in got.legs}
+    assert by[first].bid == 1.0
+    assert all(by[s].bid is None and by[s].ask is None for s in by if s != first)
+
+
+def test_no_capture_at_all_returns_the_record_unchanged():
+    from src.options.condor import _with_captured_nbbo
+
+    rec = submit(FakeClient(), a_plan(), vetoes=[])
+    assert _with_captured_nbbo(rec, {}) is rec
+
+
+def test_attaching_does_not_mutate_a_frozen_model():
+    """`CondorFill` and `CondorLegFill` are frozen Domain models; this must rebuild, not mutate."""
+    from src.options.condor import _with_captured_nbbo
+
+    rec = submit(FakeClient(), a_plan(), vetoes=[])
+    got = _with_captured_nbbo(rec, {leg.symbol: {"bid": 1.0, "ask": 1.1} for leg in rec.legs})
+    assert got is not rec
+    assert all(x.bid is None for x in rec.legs), "the original must be untouched"
+
+
+def test_a_recorder_without_the_capture_field_does_not_lose_the_fill():
+    """This runs after the order is on the wire, so it must never raise.
+
+    markwatch is a separate package. If its recorder renames or drops `quotes_at_submit`, the
+    cost must be a null NBBO, not a lost record of a real fill -- which is precisely how Monday's
+    probe filled and then crashed writing its own result.
+    """
+
+    class Bare(FakeSub):
+        def __init__(self):
+            super().__init__()
+            del self.quotes_at_submit
+
+    class R(FakeRecorder):
+        def __init__(self):
+            super().__init__()
+            self.sub = Bare()
+
+    rec = submit(FakeClient(), a_plan(), vetoes=[], recorder=R())
+    assert rec.ok and rec.filled
+    assert all(x.bid is None for x in rec.legs)
+
+
+def test_the_journalled_path_attaches_the_capture_end_to_end():
+    class R(FakeRecorder):
+        def __init__(self, quotes):
+            super().__init__()
+            self.sub = FakeSub(quotes_at_submit=quotes)
+
+    plan = a_plan()
+    syms = [x["symbol"] for x in build_legs(plan)]
+    rec = submit(
+        FakeClient(), plan, vetoes=[], recorder=R({s: {"bid": 0.5, "ask": 0.6} for s in syms})
+    )
+    assert rec.legs and all(x.bid == 0.5 and x.ask == 0.6 for x in rec.legs)
