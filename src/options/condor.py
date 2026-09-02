@@ -586,8 +586,44 @@ def submit(
                     for x in rec.legs
                 ]
             )
+            # getattr, not attribute access: this runs AFTER the order is on the wire, so
+            # anything raising here loses the record of a real fill. That is exactly how
+            # Monday's probe filled and then crashed writing its own result. markwatch is a
+            # separate package; its recorder growing or renaming a field must not cost us a
+            # measurement that cannot be reconstructed afterwards.
+            rec = _with_captured_nbbo(rec, getattr(sub, "quotes_at_submit", None))
         _ = order_row
         return rec
+
+
+def _with_captured_nbbo(rec: CondorFill, quotes: dict) -> CondorFill:
+    """Attach the submit-time NBBO the recorder captured to each leg.
+
+    `CondorLegFill` declares `bid` and `ask` -- "one leg of a filled condor, with the NBBO it
+    crossed" -- but `_place` builds it with symbol/side/signed_qty/fill_price only, so both
+    defaulted to None. Monday's probe verdict recorded four null legs and no `vs_touch` as a
+    result, and the registration had called that capture the unreconstructable part.
+
+    It was never actually missing. `submit()` passes `symbols` to `recorder.submission(...)`,
+    which captures the NBBO before the order goes out and writes it to the journal; nothing
+    joined it back to the returned model. This closes that join at the source.
+
+    There is no historical options quote endpoint on this account, so submission is the only
+    moment these prices exist. A leg the capture missed keeps its nulls: an absent quote is a
+    fact worth recording, and filling it from a later poll would silently price the fill against
+    a different market. `CondorFill` is frozen, so this rebuilds rather than mutates.
+    """
+    if not quotes:
+        return rec
+    attached = []
+    for leg in rec.legs:
+        q = quotes.get(leg.symbol) or {}
+        bid, ask = q.get("bid"), q.get("ask")
+        if bid is None and ask is None:
+            attached.append(leg)
+            continue
+        attached.append(leg.model_copy(update={"bid": bid, "ask": ask}))
+    return rec.model_copy(update={"legs": attached})
 
 
 def _place(

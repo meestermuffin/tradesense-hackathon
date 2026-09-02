@@ -1,0 +1,62 @@
+{
+  "computed_mid_vs_real_mid": 0.0,
+  "journal_decision_id": 4,
+  "journal_ts": "2026-08-31T14:19:42.778754+00:00",
+  "legs": [
+    {
+      "ask": 0.39,
+      "bid": 0.34,
+      "fill_price": 0.37,
+      "mid": 0.365,
+      "nbbo_status": "recovered",
+      "quote_ts": "2026-08-31T14:19:42.057347+00:00",
+      "side": "buy",
+      "signed_qty": 1,
+      "symbol": "SPY260902P00755000",
+      "touch": 0.39
+    },
+    {
+      "ask": 0.87,
+      "bid": 0.86,
+      "fill_price": 0.88,
+      "mid": 0.865,
+      "nbbo_status": "recovered",
+      "quote_ts": "2026-08-31T14:19:42.014319+00:00",
+      "side": "sell",
+      "signed_qty": -1,
+      "symbol": "SPY260902P00760000",
+      "touch": 0.86
+    },
+    {
+      "ask": 0.76,
+      "bid": 0.75,
+      "fill_price": 0.73,
+      "mid": 0.755,
+      "nbbo_status": "recovered",
+      "quote_ts": "2026-08-31T14:19:42.343443+00:00",
+      "side": "sell",
+      "signed_qty": -1,
+      "symbol": "SPY260902C00771000",
+      "touch": 0.75
+    },
+    {
+      "ask": 0.14,
+      "bid": 0.13,
+      "fill_price": 0.12,
+      "mid": 0.135,
+      "nbbo_status": "recovered",
+      "quote_ts": "2026-08-31T14:19:40.760870+00:00",
+      "side": "buy",
+      "signed_qty": 1,
+      "symbol": "SPY260902C00776000",
+      "touch": 0.14
+    }
+  ],
+  "nbbo_complete": true,
+  "net_credit_at_real_mid": 1.12,
+  "net_credit_at_touch": 1.08,
+  "order_id": "72813fd1-2bec-42dc-9c57-7f6825d8ac3e",
+  "source": "recovered from markwatch journal by scripts/recover_probe_nbbo.py",
+  "vs_real_mid": 0.0,
+  "vs_touch": 0.04
+}
