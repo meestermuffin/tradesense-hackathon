@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tradesense — options premium agent</title>
+<style>
+  :root {
+    --bg: #fbfaf8; --panel: #ffffff; --line: #e3e0da; --ink: #1c1a17; --dim: #6b665e;
+    --accent: #1f5f4b; --warn: #8a5a12; --bad: #8f2f26; --grid: #edeae4;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161a; --panel: #1b1e23; --line: #2c3138; --ink: #e8e6e1; --dim: #969ba3;
+      --accent: #5ec2a0; --warn: #d19a4a; --bad: #e0796d; --grid: #232830;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161a; --panel: #1b1e23; --line: #2c3138; --ink: #e8e6e1; --dim: #969ba3;
+    --accent: #5ec2a0; --warn: #d19a4a; --bad: #e0796d; --grid: #232830;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 1.25rem; margin-bottom: 1.75rem; }
+  h1 { font-size: 1.4rem; margin: 0 0 .3rem; letter-spacing: -.01em; }
+  .sub { color: var(--dim); font-size: .92rem; margin: 0; }
+  .banner {
+    background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--warn);
+    padding: .85rem 1rem; border-radius: 4px; margin: 1.25rem 0 1.75rem;
+    font-size: .88rem; color: var(--dim);
+  }
+  .banner strong { color: var(--ink); }
+  .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: .95rem 1rem;
+  }
+  .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); }
+  .value { font: 600 1.5rem/1.2 var(--mono); margin-top: .3rem; font-variant-numeric: tabular-nums; }
+  .value.up { color: var(--accent); }
+  .value.down { color: var(--bad); }
+  h2 { font-size: .95rem; margin: 2.25rem 0 .75rem; letter-spacing: .01em; }
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; font: 13px/1.5 var(--mono); font-variant-numeric: tabular-nums; }
+  th, td { padding: .5rem .7rem; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+  th { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); font-weight: 600; }
+  th:first-child, td:first-child { text-align: left; }
+  tbody tr:last-child td { border-bottom: none; }
+  .neg { color: var(--bad); } .pos { color: var(--accent); }
+  svg { display: block; width: 100%; height: 150px; }
+  footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: var(--dim); font-size: .85rem; }
+  a { color: inherit; }
+  code { font-family: var(--mono); font-size: .92em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>tradesense</h1>
+    <p class="sub">Defined-risk options premium agent — Alpaca AI Trading Agents Hackathon, paper account.</p>
+  </header>
+
+  <div class="banner" id="banner">Loading…</div>
+
+  <div class="grid" id="cards"></div>
+
+  <h2>Equity</h2>
+  <div class="scroll"><svg id="spark" viewBox="0 0 900 150" preserveAspectRatio="none" aria-label="Equity curve"></svg></div>
+
+  <h2>Structures submitted</h2>
+  <div class="scroll"><table id="structs">
+    <thead><tr><th>Order</th><th>Expiry</th><th>Qty</th><th>Net limit</th><th>Captured mid</th><th>Touch</th><th>Status</th></tr></thead>
+    <tbody></tbody></table></div>
+
+  <h2>Leg fills, against the NBBO captured at submission</h2>
+  <div class="scroll"><table id="fills">
+    <thead><tr><th>Symbol</th><th>Qty</th><th>Fill</th><th>Bid</th><th>Ask</th><th>Mid</th></tr></thead>
+    <tbody></tbody></table></div>
+
+  <h2>Mark quality</h2>
+  <div class="scroll"><table id="mq"><tbody></tbody></table></div>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const money = n => n == null ? "—" : n.toLocaleString(undefined, {style:"currency", currency:"USD", maximumFractionDigits:2});
+const num = (n, d=2) => n == null ? "—" : Number(n).toFixed(d);
+
+fetch("data.json").then(r => r.json()).then(render).catch(e => {
+  $("#banner").innerHTML = "<strong>Could not load data.json.</strong> " + e;
+});
+
+function render(d) {
+  const built = new Date(d.generated_at);
+  $("#banner").innerHTML =
+    "<strong>Static snapshot, built " + built.toUTCString() + ".</strong> " +
+    "This page does not call a broker and holds no credentials — it renders the JSON committed " +
+    "beside it, so it is only as current as its last build. " +
+    "The trading signal this project began with was falsified and shelved; no predictive edge is claimed.";
+
+  const eq = d.latest_equity, start = d.start_equity;
+  const pnl = eq == null ? null : eq - start;
+  const cls = pnl == null ? "" : (pnl >= 0 ? " up" : " down");
+  const cards = [
+    ["Equity", money(eq), cls],
+    ["P&L vs start", pnl == null ? "—" : (pnl >= 0 ? "+" : "") + money(pnl), cls],
+    ["Return", pnl == null ? "—" : ((pnl / start * 100).toFixed(2) + "%"), cls],
+    ["Structures", d.structures.length, ""],
+    ["Leg fills", d.fills.length, ""],
+    ["Mark samples", (d.mark_quality.samples ?? 0).toLocaleString(), ""],
+  ];
+  $("#cards").innerHTML = cards.map(([l, v, c]) =>
+    `<div class="card"><div class="label">${l}</div><div class="value${c}">${v}</div></div>`).join("");
+
+  // equity sparkline
+  const pts = d.equity_curve.filter(p => p.equity != null);
+  if (pts.length > 1) {
+    const ys = pts.map(p => p.equity), lo = Math.min(...ys, start), hi = Math.max(...ys, start);
+    const pad = (hi - lo) * 0.12 || 1;
+    const Y = v => 150 - ((v - (lo - pad)) / ((hi + pad) - (lo - pad))) * 150;
+    const X = i => (i / (pts.length - 1)) * 900;
+    const line = pts.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(p.equity).toFixed(1)}`).join("");
+    const base = Y(start).toFixed(1);
+    $("#spark").innerHTML =
+      `<line x1="0" y1="${base}" x2="900" y2="${base}" stroke="var(--grid)" stroke-width="1" stroke-dasharray="4 4"/>` +
+      `<path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/>` +
+      `<circle cx="${X(pts.length-1).toFixed(1)}" cy="${Y(ys[ys.length-1]).toFixed(1)}" r="3.5" fill="var(--accent)"/>`;
+  }
+
+  $("#structs tbody").innerHTML = d.structures.map(s => `<tr>
+    <td>${s.order}</td><td>${s.expiry ?? "—"}</td><td>${s.contracts ?? "—"}</td>
+    <td>${num(s.net_limit)}</td><td>${num(s.credit_at_captured_mid, 3)}</td>
+    <td>${num(s.credit_at_touch, 3)}</td><td>${s.status ?? "—"}</td></tr>`).join("");
+
+  $("#fills tbody").innerHTML = d.fills.map(f => `<tr>
+    <td>${f.symbol}</td><td class="${f.signed_qty < 0 ? "neg" : "pos"}">${f.signed_qty}</td>
+    <td>${num(f.fill)}</td><td>${num(f.bid)}</td><td>${num(f.ask)}</td><td>${num(f.mid, 3)}</td></tr>`).join("");
+
+  const q = d.mark_quality;
+  $("#mq tbody").innerHTML = [
+    ["Samples", (q.samples ?? 0).toLocaleString()],
+    ["Priced from a live quote", (q.priced ?? 0).toLocaleString()],
+    ["Coverage", q.coverage == null ? "—" : (q.coverage * 100).toFixed(1) + "%"],
+    ["Mean quote age", q.mean_quote_age_s == null ? "—" : q.mean_quote_age_s + " s"],
+    ["Feed", q.feed],
+  ].map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("") +
+    `<tr><td colspan="2" style="text-align:left;white-space:normal;color:var(--dim)">${q.note}</td></tr>`;
+
+  $("#foot").innerHTML = d.disclaimer +
+    " Source: <code>scripts/build_site.py</code>. MIT licensed.";
+}
+</script>
+</body>
+</html>
