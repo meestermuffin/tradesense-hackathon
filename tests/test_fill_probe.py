@@ -221,3 +221,61 @@ def test_the_newest_verdict_wins(tmp_path, monkeypatch):
     (tmp_path / "2026-08-31-verdict.json").write_text(json.dumps({"verdict": CONDORS, "why": "a"}))
     (tmp_path / "2026-09-01-verdict.json").write_text(json.dumps({"verdict": STOP, "why": "b"}))
     assert not fp.gate(dt.date(2026, 9, 1))[0]
+
+
+# ---- the verdict must carry where its number came from
+
+
+def _probe(nbbo_legs=4, fill=-1.12, credit_at_mid=1.12):
+    """A filled probe with `nbbo_legs` of its four legs carrying a captured quote."""
+    from src.models import CondorFill, CondorLegFill
+
+    legs = []
+    for i in range(4):
+        sell = i % 2 == 1
+        got = i < nbbo_legs
+        legs.append(
+            CondorLegFill(
+                symbol=f"SPY260902{'C' if i > 1 else 'P'}0075{i}000",
+                side="sell" if sell else "buy",
+                signed_qty=-1 if sell else 1,
+                fill_price=1.0,
+                bid=0.55 if got else None,
+                ask=0.57 if got else None,
+            )
+        )
+    return CondorFill(
+        ok=True,
+        filled=True,
+        underlying="SPY",
+        expiry=dt.date(2026, 9, 2),
+        contracts=1,
+        limit_price=fill,
+        credit_at_mid=credit_at_mid,
+        submitted_at="2026-08-31T14:19:38+00:00",
+        fill=fill,
+        legs=legs,
+    )
+
+
+def test_a_verdict_from_an_estimate_says_so():
+    """`verdict_for` gates real orders. A number without its provenance is the original bug.
+
+    #32 made `vs_mid` fall back to `credit_at_mid` when the capture is incomplete, and label the
+    fallback on the model. But `verdict_for` reads the bare float, so a CONDORS verdict derived
+    from our own pre-submission estimate was indistinguishable from one derived from the market.
+    """
+    v, why = verdict_for(_probe(nbbo_legs=3))
+    assert v == CONDORS
+    assert "estimate" in why.lower(), why
+
+
+def test_a_verdict_from_the_market_says_that_too():
+    v, why = verdict_for(_probe(nbbo_legs=4))
+    assert v == CONDORS
+    assert "market" in why.lower(), why
+
+
+def test_the_source_does_not_change_the_verdict_itself():
+    """Labelling is not gating. Whether an estimate is good enough is a policy call, not this."""
+    assert verdict_for(_probe(nbbo_legs=3))[0] == verdict_for(_probe(nbbo_legs=4))[0]
