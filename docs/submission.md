@@ -88,7 +88,57 @@ runs on a fresh clone with no credentials and no network.
 
 ## Results
 
-*(Filled after the Thursday 3 September close.)*
+**$95,811.86 at the Thursday 3 September close, down $4,188 from $100,000: −4.19%.** Settlement of
+the expiring legs was still completing when this was written; the figure is the scored EOD equity,
+which the event rules state includes exercises and assignments.
+
+Four structures, $4,480 of premium collected:
+
+| | outcome | |
+|---|---|---|
+| probe, Sep 2, 1x | expired worthless | +112 |
+| tranche 1, Sep 2, 13x | expired worthless | +1,365 |
+| tranche 2, Sep 3, 13x | closed at 1.75 against 1.16 collected | −767 |
+| tranche 3, Sep 3, 13x | short 768 call assigned; its 773 wing covered nothing | −5,005 |
+
+SPY closed at 772.39 on Thursday, +0.93% from Wednesday, through the short calls of both Sep 3
+structures. Nothing exceeded a registered limit: maximum defined loss across the book was $9,997
+and the realized loss was $4,188. The kill switch, keyed at 8% mark-to-market drawdown, never
+approached firing.
+
+**Two human overrides account for the loss, and both went against the system's own output.**
+
+The first was tranche 3. The model refused it, arguing that a third SPY condor at an overlapping
+expiry with near-identical strikes is not a third position but more of the same bet, and that the
+three would breach together. A human overrode the refusal. That structure lost its full defined
+maximum and is the entire loss; the other three netted +$710 between them. Its second argument, that
+the structure carried no premium edge, did not survive checking and we said so at the time. We
+checked the argument that was wrong and not the one that was right.
+
+The second was holding into Thursday. Asked on Wednesday, with the book up $2,594, why the position
+was not being closed, we answered with the general principle that a short-premium book collects
+decay and holds to expiry. We did not check what the remaining position was actually offering:
+$3,003 still to gain against $9,997 still at risk, 3.3 to 1 against. Decay is front-loaded in what
+is kept and back-loaded in what is risked, so the final day of a short option is when it pays least
+for the most exposure. The scored moment and the expiry were the same moment, so there was no
+tomorrow to collect into. Peak-to-final cost $7,214.
+
+**One analytical error underlies the entry.** The Sep 3 structures were sold on the observation that
+2-DTE implied volatility of 0.126 sat above trailing realized of 0.065 to 0.103. That comparison was
+biased in our favour and we did not notice: the trailing window was measured over calm sessions
+while the forward window contained scheduled data releases. The day realized 14.8% against the 12.6%
+we sold. The premium was thin for the day rather than rich, and nobody in the loop, model or human,
+priced the event.
+
+**What the system did do**, on the same record: refused a trade for a reason we had not anticipated
+and were wrong about, in the skew defect above; flagged the expiry-day breach through the pin check;
+and executed the first close this project has ever placed, filling eight cents inside its limit
+through a path built the same afternoon. Two bugs were found in our own risk tooling in one hour,
+one of them by a dry run a single strike away from a live order, and both are recorded in the
+issue tracker rather than quietly patched.
+
+The honest summary is that every component behaved as specified and the losses came from operators
+overriding it. That is not the result we wanted and it is the one the record supports.
 
 ---
 

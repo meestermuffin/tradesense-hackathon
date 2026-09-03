@@ -71,6 +71,11 @@
   <h2>Equity</h2>
   <div class="scroll"><svg id="spark" viewBox="0 0 900 150" preserveAspectRatio="none" aria-label="Equity curve"></svg></div>
 
+  <h2>Every order this account placed</h2>
+  <div class="scroll"><table id="orders">
+    <thead><tr><th>Submitted</th><th>Dir</th><th>Qty</th><th>Limit</th><th>Filled</th><th>Status</th></tr></thead>
+    <tbody></tbody></table></div>
+
   <h2>Structures submitted</h2>
   <div class="scroll"><table id="structs">
     <thead><tr><th>Order</th><th>Expiry</th><th>Qty</th><th>Net limit</th><th>Captured mid</th><th>Touch</th><th>Status</th></tr></thead>
@@ -132,6 +137,13 @@ function render(d) {
       `<path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/>` +
       `<circle cx="${X(pts.length-1).toFixed(1)}" cy="${Y(ys[ys.length-1]).toFixed(1)}" r="3.5" fill="var(--accent)"/>`;
   }
+
+  const ords = Array.isArray(d.orders) ? d.orders.filter(o => !o.unavailable) : [];
+  $("#orders tbody").innerHTML = ords.map(o => `<tr>
+    <td>${(o.submitted_at || "").slice(0, 19).replace("T", " ")}</td>
+    <td class="${o.opening ? "pos" : "neg"}">${o.opening ? "open" : "close"}</td>
+    <td>${o.qty ?? "—"}</td><td>${num(o.limit_price)}</td>
+    <td>${num(o.filled_avg_price)}</td><td>${o.status ?? "—"}</td></tr>`).join("");
 
   $("#structs tbody").innerHTML = d.structures.map(s => `<tr>
     <td>${s.order}</td><td>${s.expiry ?? "—"}</td><td>${s.contracts ?? "—"}</td>
