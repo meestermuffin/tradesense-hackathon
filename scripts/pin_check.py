@@ -63,12 +63,38 @@ def structures(positions):
     return by
 
 
+def pair_wings(legs):
+    """Match each short to its own wing, consuming each long exactly once.
+
+    A book can hold two condors at one expiry, and the broker does not record which ticket a leg
+    arrived on. Taking the *nearest* long above a short therefore reaches into the other structure:
+    on 3 September the 772 call's nearest long was 773, tranche 3's wing, while its own was 777.
+    That made a short with no protection read as fully covered, and the check reported `watch`
+    while an unprotected short sat in the money.
+
+    Pairing by rank fixes it. Calls ascend away from spot and puts descend, so sorting both sides
+    the same direction and zipping pairs each structure with itself: calls 768,772 against longs
+    773,777 gives 768/773 and 772/777. A long consumed by one short cannot cover another, which is
+    the property that was actually missing -- protection we do not own was being counted twice.
+
+    Returns {(strike, right): wing_strike or None}.
+    """
+    out = {}
+    for right in ("P", "C"):
+        desc = right == "P"
+        shorts = sorted((k for k, r, q in legs if r == right and q < 0), reverse=desc)
+        longs = sorted((k for k, r, q in legs if r == right and q > 0), reverse=desc)
+        for i, k in enumerate(shorts):
+            out[(k, right)] = longs[i] if i < len(longs) else None
+    return out
+
+
 def assess(spot, legs, warn=WARN_POINTS):
     """Classify one expiry. Returns (severity, message) with severity 0 clear, 1 warn, 2 breach."""
     shorts = [(k, r) for k, r, q in legs if q < 0]
-    longs = sorted(k for k, r, q in legs if q > 0)
     if not shorts:
         return 0, "no short legs"
+    wings = pair_wings(legs)
 
     worst, msg = 0, []
     for strike, right in sorted(shorts):
@@ -78,7 +104,7 @@ def assess(spot, legs, warn=WARN_POINTS):
         else:
             itm = spot >= strike
             dist = strike - spot
-        wing = _wing_for(strike, right, longs)
+        wing = wings.get((strike, right))
         if itm:
             beyond = (wing is not None) and ((spot <= wing) if right == "P" else (spot >= wing))
             if beyond:
@@ -96,15 +122,6 @@ def assess(spot, legs, warn=WARN_POINTS):
         else:
             msg.append(f"{strike:g}{right} clear by {dist:.2f}")
     return worst, "; ".join(msg)
-
-
-def _wing_for(strike, right, longs):
-    """The long protecting this short: next strike below for a put, above for a call."""
-    if right == "P":
-        below = [k for k in longs if k < strike]
-        return max(below) if below else None
-    above = [k for k in longs if k > strike]
-    return min(above) if above else None
 
 
 def main(argv=None):

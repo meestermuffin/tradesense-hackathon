@@ -55,12 +55,21 @@ def verdict_for(rec) -> tuple[str, str]:
 
     The registration's table, in its own order. `vs_mid` is positive for price improvement, so the
     floor is a lower bound on a signed quantity, not a magnitude.
+
+    The reason names where `vs_mid` came from. `CondorFill.vs_mid` reads the NBBO captured at
+    submission when every leg carries one and falls back to our own pre-submission estimate when
+    they do not, and the two are different numbers -- on one order here they differed by 0.075.
+    This verdict gates live sizing, so a CONDORS derived from an estimate must not read the same
+    as one derived from the market. Labelling only: whether an estimate is good enough to size on
+    is a policy call and is deliberately not decided here.
     """
     if rec is None or not rec.ok:
         return STOP, "the probe did not reach the broker"
     status = (rec.status or "").lower()
     if status in ("rejected", "canceled_by_broker") or (not rec.filled and status == "rejected"):
         return STOP, f"broker rejected the order (status {rec.status}) -- a platform problem"
+    src = getattr(rec, "vs_mid_source", None)
+    ref = f" against the {src} mid" if src else ""
     if rec.filled:
         vs = rec.vs_mid
         if vs is None:
@@ -71,12 +80,12 @@ def verdict_for(rec) -> tuple[str, str]:
         if vs >= FILL_FLOOR:
             return (
                 CONDORS,
-                f"filled within {POLL_SECONDS:.0f}s at vs_mid {vs:+.3f}, "
+                f"filled within {POLL_SECONDS:.0f}s at vs_mid {vs:+.3f}{ref}, "
                 f"at or above mid{FILL_FLOOR:+.2f}",
             )
         return (
             CONDORS_WALKED,
-            f"filled within {POLL_SECONDS:.0f}s but at vs_mid {vs:+.3f}, "
+            f"filled within {POLL_SECONDS:.0f}s but at vs_mid {vs:+.3f}{ref}, "
             f"below mid{FILL_FLOOR:+.2f}",
         )
     return (
@@ -253,6 +262,11 @@ def main() -> int:
         "filled": rec.filled,
         "fill": rec.fill,
         "vs_mid": rec.vs_mid,
+        # Provenance travels with the number or the number is unusable later. This file is both
+        # the record and the gate `run_agent.py --live` reads.
+        "vs_mid_source": getattr(rec, "vs_mid_source", None),
+        "vs_touch": getattr(rec, "vs_touch", None),
+        "fill_quality": getattr(rec, "fill_quality", None),
         "credit_at_mid": rec.credit_at_mid,
         "limit_price": rec.limit_price,
         "order_id": rec.order_id,

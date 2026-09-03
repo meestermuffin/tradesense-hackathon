@@ -80,3 +80,55 @@ def test_non_option_symbols_are_ignored():
 
 def test_no_shorts_is_not_a_risk():
     assert assess(765.0, [(754.0, "P", 13)])[0] == 0
+
+
+# ---- overlapping structures at one expiry
+
+
+# The real 3 Sep book: tranche 2 at 753/758P 772/777C, tranche 3 at 750/755P 768/773C.
+# Same expiry, so proximity cannot tell the two structures apart.
+OVERLAPPING = [
+    (750.0, "P", 13),
+    (753.0, "P", 13),
+    (755.0, "P", -13),
+    (758.0, "P", -13),
+    (768.0, "C", -13),
+    (772.0, "C", -13),
+    (773.0, "C", 13),
+    (777.0, "C", 13),
+]
+
+
+def test_a_short_is_not_covered_by_another_structures_wing():
+    """The bug that made the live check report `watch` while a short sat unprotected.
+
+    At SPY 773.85 the 772 call is in the money. Its own wing is 777, which is not. That is
+    assignment without the offset -- severity 2. `_wing_for` instead took 773, the nearest long
+    above, which belongs to the other structure, concluded the short was past its wing, and
+    downgraded to `watch`.
+
+    Understating risk in exactly the circumstance the check exists to flag.
+    """
+    sev, msg = assess(773.85, OVERLAPPING)
+    assert sev == 2, msg
+    assert "IN THE MONEY" in msg
+
+
+def test_each_long_can_only_cover_one_short():
+    """773 protects 768 or 772, not both. Reusing it prices protection we do not own."""
+    sev, msg = assess(773.85, OVERLAPPING)
+    assert msg.count("fully defined") <= 1, msg
+
+
+def test_a_genuinely_covered_short_still_reads_as_defined():
+    """Past its own wing, the loss is the one we priced. Do not escalate that."""
+    sev, msg = assess(779.0, OVERLAPPING)  # through 777, both spreads fully in the money
+    assert sev == 1, msg
+    assert "fully defined" in msg
+
+
+def test_a_single_structure_is_unaffected():
+    """The pairing must not change behaviour on a book holding one condor."""
+    sev, _ = assess(765.0, CONDOR)
+    assert sev == 0
+    assert assess(758.0, CONDOR)[0] == 2
