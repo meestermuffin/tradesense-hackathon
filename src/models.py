@@ -389,6 +389,20 @@ class CondorLegFill(Domain):
     ask: float | None = None
 
 
+def _leg_is_sell(leg: CondorLegFill) -> bool:
+    """Trade direction for one leg. `side` is authoritative; sign is the fallback.
+
+    Position sign and trade direction agree on an opening order and disagree on a closing one,
+    which is why the recorded `side` is preferred over `signed_qty` wherever it exists.
+    """
+    s = (leg.side or "").strip().lower()
+    if s.startswith("sell"):
+        return True
+    if s.startswith("buy"):
+        return False
+    return leg.signed_qty < 0
+
+
 class CondorFill(Domain):
     """A submitted condor and what happened to it.
 
@@ -414,9 +428,88 @@ class CondorFill(Domain):
     vetoes: list[str] = Field(default_factory=list)
 
     @property
+    def nbbo_legs(self) -> int:
+        """How many legs carry the NBBO captured at submit."""
+        return sum(1 for x in self.legs if x.bid is not None and x.ask is not None)
+
+    @property
+    def nbbo_complete(self) -> bool:
+        """Every leg priced. A partial capture cannot produce a net credit.
+
+        Three of four legs is not an approximate net -- it is a different quantity, and averaging
+        over whichever legs happened to quote is the bug this whole workstream exists to catch.
+        """
+        return bool(self.legs) and self.nbbo_legs == len(self.legs)
+
+    @property
+    def net_credit_at_mid(self) -> float | None:
+        """Net credit at the captured midpoints. None unless every leg is priced.
+
+        A sell takes in, a buy pays out, so the signs follow the trade direction rather than the
+        position: on a closing order the same strike is on the other side of the ledger.
+        """
+        if not self.nbbo_complete:
+            return None
+        total = 0.0
+        for x in self.legs:
+            mid = (x.bid + x.ask) / 2.0
+            total += mid if _leg_is_sell(x) else -mid
+        return round(total, 4)
+
+    @property
+    def net_credit_at_touch(self) -> float | None:
+        """The credit if every leg crossed: sells hit the bid, buys lift the ask."""
+        if not self.nbbo_complete:
+            return None
+        total = 0.0
+        for x in self.legs:
+            total += x.bid if _leg_is_sell(x) else -x.ask
+        return round(total, 4)
+
+    @property
+    def vs_mid_source(self) -> str:
+        """`market` when derived from the captured NBBO, `estimate` when from our own credit.
+
+        Always read this beside `vs_mid`. An unlabelled fallback is indistinguishable from a
+        measurement, which is exactly how the original null-legged verdict passed for one.
+        """
+        return "market" if self.net_credit_at_mid is not None else "estimate"
+
+    @property
     def vs_mid(self) -> float | None:
-        """Positive is price improvement: we collected more than the mid.
+        """Positive is price improvement: we collected more than the reference.
 
         `fill` comes back as a net price, negative for a credit, so it is compared on magnitude.
+        The reference is the captured market mid where we have one and our own `credit_at_mid`
+        where we do not -- `vs_mid_source` says which, and callers must not drop it.
         """
-        return None if self.fill is None else round(abs(self.fill) - self.credit_at_mid, 4)
+        if self.fill is None:
+            return None
+        reference = self.net_credit_at_mid
+        if reference is None:
+            reference = self.credit_at_mid
+        return round(abs(self.fill) - reference, 4)
+
+    @property
+    def vs_touch(self) -> float | None:
+        """Positive means we beat crossing every leg. None without a full capture.
+
+        There is deliberately no estimated fallback: we compute a mid before submitting but never
+        a touch, so an estimated `vs_touch` would be invented rather than approximated.
+        """
+        if self.fill is None or self.net_credit_at_touch is None:
+            return None
+        return round(abs(self.fill) - self.net_credit_at_touch, 4)
+
+    @property
+    def fill_quality(self) -> dict:
+        """`vs_mid` and its provenance in one object, so they cannot travel separately."""
+        return {
+            "vs_mid": self.vs_mid,
+            "vs_touch": self.vs_touch,
+            "source": self.vs_mid_source,
+            "nbbo_legs": f"{self.nbbo_legs}/{len(self.legs)}",
+            "net_credit_at_mid": self.net_credit_at_mid,
+            "net_credit_at_touch": self.net_credit_at_touch,
+            "credit_at_mid_estimated": self.credit_at_mid,
+        }
