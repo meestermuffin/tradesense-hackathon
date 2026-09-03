@@ -144,6 +144,47 @@ def mark_quality(conn):
     }
 
 
+def broker_orders():
+    """Every order the broker has, including any the journal missed.
+
+    The 3 Sep close was placed by `close_condor.py`, which calls `submit_mleg` directly and passes
+    no markwatch recorder -- so it filled and left no journal row. The journal is the richer record
+    where it has one, but it is not the complete one, and a page that showed four orders when the
+    account placed five would be wrong in the direction that flatters us.
+    """
+    try:
+        from src.data.alpaca import AlpacaClient
+
+        c = AlpacaClient()
+        raw = c.request(
+            "GET", c.trade_host, "/v2/orders", {"status": "all", "limit": 50, "nested": "true"}
+        )
+        out = []
+        for o in sorted(raw, key=lambda x: x["submitted_at"]):
+            out.append(
+                {
+                    "submitted_at": o["submitted_at"],
+                    "status": o["status"],
+                    "qty": o.get("qty"),
+                    "limit_price": o.get("limit_price"),
+                    "filled_avg_price": o.get("filled_avg_price"),
+                    "opening": float(o.get("limit_price") or 0) < 0,
+                    "legs": [
+                        {
+                            "symbol": leg["symbol"],
+                            "side": leg["side"],
+                            "intent": leg.get("position_intent"),
+                            "fill": leg.get("filled_avg_price"),
+                        }
+                        for leg in (o.get("legs") or [])
+                    ],
+                }
+            )
+        return out
+    except Exception as e:
+        return [{"unavailable": f"{type(e).__name__}: {str(e)[:120]}"}]
+
+
 def broker_state():
     """Live account and positions. Optional: the page must build on a clone with no credentials."""
     try:
@@ -184,6 +225,7 @@ def main(argv=None):
         "fills": fills(conn),
         "mark_quality": mark_quality(conn),
         "broker": {"skipped": True} if a.no_broker else broker_state(),
+        "orders": [] if a.no_broker else broker_orders(),
         "disclaimer": (
             "Static snapshot. This page does not call any broker and holds no credentials; it "
             "renders the JSON committed alongside it. The trading signal this project began with "
